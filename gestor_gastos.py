@@ -42,41 +42,53 @@ CATEGORIAS = ["Supermercado/Despensa", "Software/Suscripciones", "Alimentos/Rest
 METODOS = ["Manual/Físico", "Automático"]
 TIPOS = ["Gasto", "Abono"]
 
-# --- CONEXIÓN A GOOGLE SHEETS ---
+# --- CONEXIÓN A GOOGLE SHEETS (MODO DIAGNÓSTICO) ---
 try:
+    # 1. Intentar conectar
     conn = st.connection("gsheets", type=GSheetsConnection)
+    
+    # 2. Intentar leer (Aquí es donde suele dar el error de conexión)
     df_raw = conn.read(ttl=0)
     
     if df_raw is not None:
-        # Esto limpia automáticamente cualquier espacio extra en los títulos del Excel
+        # Limpiar nombres de columnas eliminando espacios locos o saltos de línea
         df_raw.columns = [str(c).strip() for c in df_raw.columns]
         
         cols_necesarias = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
         
-        # Verificamos si faltan columnas y avisamos cuáles son
+        # Verificar si las columnas existen
         faltantes = [c for c in cols_necesarias if c not in df_raw.columns]
         if faltantes:
-            st.error(f"⚠️ Faltan estas columnas en tu Excel: {', '.join(faltantes)}")
-            st.info(f"Columnas detectadas actualmente: {list(df_raw.columns)}")
+            st.error(f"❌ Columnas no encontradas: {faltantes}")
+            st.info(f"Tu Excel tiene estas columnas: {list(df_raw.columns)}")
             st.stop()
             
         df_man = df_raw[cols_necesarias].copy()
         
-        # Limpieza de datos
+        # Limpieza de datos para los selectores
         for col in ["Tipo", "Categoria", "Metodo_Pago"]:
-            df_man[col] = df_man[col].astype(str).str.strip()
+            df_man[col] = df_man[col].astype(str).str.strip().replace("nan", "")
         
         df_man['Fecha'] = pd.to_datetime(df_man['Fecha'], errors='coerce')
         df_man['Monto'] = pd.to_numeric(df_man['Monto'], errors='coerce').fillna(0.0)
     else:
-        df_man = pd.DataFrame(columns=cols_necesarias)
+        st.warning("⚠️ La hoja de Google Sheets parece estar vacía.")
+        df_man = pd.DataFrame(columns=["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"])
 
     disponible_banco = 20000.0 
 
 except Exception as e:
-    st.error(f"Error de conexión: {e}")
+    st.error("🚨 ERROR DE CONEXIÓN DETALLADO:")
+    st.code(str(e)) # Esto nos dirá el mensaje técnico real
+    
+    st.divider()
+    st.subheader("💡 Lista de verificación rápida:")
+    st.markdown("""
+    1. **¿Compartiste la hoja?** Ve a Google Sheets -> Compartir -> Pega el `client_email` de tu JSON como **Editor**.
+    2. **¿Formato de Secrets?** Asegúrate de que en Streamlit Secrets la `private_key` empiece con `"-----BEGIN PRIVATE KEY-----\\n` y termine con `\\n-----END PRIVATE KEY-----\\n"`. No borres los `\\n`.
+    3. **¿URL correcta?** La URL en los Secrets debe ser la que aparece en la barra de tu navegador al abrir el Excel.
+    """)
     st.stop()
-
 # --- INTERFAZ ---
 tab_bitacora, tab_analisis = st.tabs(["⌨️ Registro Manual", "📊 Análisis Profundo"])
 
