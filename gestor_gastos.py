@@ -9,30 +9,6 @@ from datetime import datetime
 # --- FUNCIONES DE SOPORTE ---
 def a_float(v):
     try:
-        if pd.isna(v) or v == "": return 0.0
-        clean_v = str(v).replace(',', '').replace('$', '').replace(' ', '').strip()
-        return float(clean_v)
-    except: return 0.0
-
-# --- CONFIGURACIÓN DE OPCIONES ---
-CATEGORIAS = ["Supermercado/Despensa", "Software/Suscripciones", "Alimentos/Restaurantes", "Servicios", "Préstamos", "Viajes", "Salud", "Transporte", "Seguros", "Compras/Otros", "Pagos Realizados"]
-METODOS = ["Manual/Físico", "Automático"]
-TIPOS = ["Gasto", "Abono"]
-
-import streamlit as st
-from streamlit_gsheets import GSheetsConnection
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-import os
-from datetime import datetime
-
-st.set_page_config(page_title="Mi Bitácora Pro", layout="wide")
-st.title("📝 Gestor de Gastos en la Nube")
-
-# --- FUNCIONES DE SOPORTE ---
-def a_float(v):
-    try:
         if pd.isna(v) or str(v).strip() == "": return 0.0
         return float(str(v).replace(',', '').replace('$', '').replace(' ', '').strip())
     except: return 0.0
@@ -53,8 +29,7 @@ st.set_page_config(page_title="Mi Bitácora Pro", layout="wide")
 # --- CONEXIÓN SEGURA ---
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
-    df_raw = conn.read(ttl=0) # ttl=0 para refrescar siempre
-    
+    df_raw = conn.read(ttl=0)
     COLUMNAS = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
     
     if df_raw is not None and not df_raw.empty:
