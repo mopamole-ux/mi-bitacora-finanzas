@@ -144,3 +144,26 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
+import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
+
+st.set_page_config(page_title="Mi Bitácora en la Nube", layout="wide")
+st.title("📝 Gestor de Gastos (Google Sheets)")
+
+# 1. Conexión a la Hoja de Google
+# La URL se configura en los "Secrets" de Streamlit Cloud
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+# 2. Leer datos existentes
+df = conn.read()
+
+# 3. Mostrar el Editor (Igual al que ya teníamos)
+df_editado = st.data_editor(df, num_rows="dynamic", width="stretch")
+
+# 4. Botón para Guardar de vuelta a Google Sheets
+if st.button("💾 Guardar en la Nube"):
+    conn.update(data=df_editado)
+    st.success("¡Datos guardados en tu Google Drive!")
+    st.rerun()
