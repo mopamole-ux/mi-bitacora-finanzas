@@ -42,86 +42,84 @@ CATEGORIAS = ["Supermercado/Despensa", "Software/Suscripciones", "Alimentos/Rest
 METODOS = ["Manual/Físico", "Automático"]
 TIPOS = ["Gasto", "Abono"]
 
-# --- CONEXIÓN A GOOGLE SHEETS (MODO DIAGNÓSTICO) ---
+import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+
+st.set_page_config(page_title="Mi Bitácora Pro", layout="wide")
+
+# --- CONEXIÓN ---
 try:
-    # 1. Intentar conectar
     conn = st.connection("gsheets", type=GSheetsConnection)
     
-    # 2. Intentar leer (Aquí es donde suele dar el error de conexión)
+    # Intentamos leer la hoja
     df_raw = conn.read(ttl=0)
     
-    if df_raw is not None:
-        # Limpiar nombres de columnas eliminando espacios locos o saltos de línea
+    # Definimos las columnas que DEBEN existir
+    cols_necesarias = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
+    
+    if df_raw is not None and not df_raw.empty:
+        # Limpiar títulos
         df_raw.columns = [str(c).strip() for c in df_raw.columns]
         
-        cols_necesarias = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
+        # Si faltan columnas, las creamos vacías para que no truene
+        for c in cols_necesarias:
+            if c not in df_raw.columns:
+                df_raw[c] = None
         
-        # Verificar si las columnas existen
-        faltantes = [c for c in cols_necesarias if c not in df_raw.columns]
-        if faltantes:
-            st.error(f"❌ Columnas no encontradas: {faltantes}")
-            st.info(f"Tu Excel tiene estas columnas: {list(df_raw.columns)}")
-            st.stop()
-            
         df_man = df_raw[cols_necesarias].copy()
         
-        # Limpieza de datos para los selectores
+        # Limpieza agresiva de datos para los selectores
         for col in ["Tipo", "Categoria", "Metodo_Pago"]:
             df_man[col] = df_man[col].astype(str).str.strip().replace("nan", "")
-        
+            
         df_man['Fecha'] = pd.to_datetime(df_man['Fecha'], errors='coerce')
         df_man['Monto'] = pd.to_numeric(df_man['Monto'], errors='coerce').fillna(0.0)
     else:
-        st.warning("⚠️ La hoja de Google Sheets parece estar vacía.")
-        df_man = pd.DataFrame(columns=["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"])
+        # Si la hoja está vacía, creamos un DataFrame con la estructura correcta
+        df_man = pd.DataFrame(columns=cols_necesarias)
 
-    disponible_banco = 20000.0 
+    disponible_banco = 20000.0
 
 except Exception as e:
-    st.error("🚨 ERROR DE CONEXIÓN DETALLADO:")
-    st.code(str(e)) # Esto nos dirá el mensaje técnico real
-    
-    st.divider()
-    st.subheader("💡 Lista de verificación rápida:")
-    st.markdown("""
-    1. **¿Compartiste la hoja?** Ve a Google Sheets -> Compartir -> Pega el `client_email` de tu JSON como **Editor**.
-    2. **¿Formato de Secrets?** Asegúrate de que en Streamlit Secrets la `private_key` empiece con `"-----BEGIN PRIVATE KEY-----\\n` y termine con `\\n-----END PRIVATE KEY-----\\n"`. No borres los `\\n`.
-    3. **¿URL correcta?** La URL en los Secrets debe ser la que aparece en la barra de tu navegador al abrir el Excel.
-    """)
+    st.error("🚨 Error de conexión. Revisa tus Secrets y que hayas compartido la hoja con el correo del bot.")
+    st.exception(e) # Esto mostrará el error real en rojo
     st.stop()
+
 # --- INTERFAZ ---
-tab_bitacora, tab_analisis = st.tabs(["⌨️ Registro Manual", "📊 Análisis Profundo"])
+st.title("📝 Gestor de Gastos")
+tab_bitacora, tab_analisis = st.tabs(["⌨️ Registro", "📊 Análisis"])
 
 with tab_bitacora:
-    st.subheader("Entrada de Movimientos")
-    
     df_editado = st.data_editor(
         df_man,
         num_rows="dynamic",
         width="stretch",
         column_config={
             "Fecha": st.column_config.DateColumn("Fecha", format="DD-MM-YYYY"),
-            "Tipo": st.column_config.SelectboxColumn("Tipo", options=TIPOS),
-            "Metodo_Pago": st.column_config.SelectboxColumn("Método", options=METODOS),
-            "Categoria": st.column_config.SelectboxColumn("Categoría", options=CATEGORIAS),
+            "Tipo": st.column_config.SelectboxColumn("Tipo", options=["Gasto", "Abono"]),
+            "Metodo_Pago": st.column_config.SelectboxColumn("Método", options=["Manual/Físico", "Automático"]),
+            "Categoria": st.column_config.SelectboxColumn("Categoría", options=["Servicios", "Supermercado/Despensa", "Alimentos/Restaurantes", "Software/Suscripciones", "Préstamos", "Viajes", "Salud", "Transporte", "Seguros", "Compras/Otros", "Pagos Realizados"]),
             "Monto": st.column_config.NumberColumn("Monto", format="$%.2f")
         },
-        key="editor_v5"
+        key="editor_vFinal"
     )
     
-    if st.button("💾 GUARDAR EN LA NUBE"):
+    if st.button("💾 GUARDAR CAMBIOS"):
         try:
+            # Quitamos filas vacías antes de guardar
             df_save = df_editado.dropna(subset=['Fecha', 'Monto'], how='any').copy()
-            df_save['Fecha'] = df_save['Fecha'].dt.strftime('%Y-%m-%d')
-            # Intentar actualizar
-            conn.update(data=df_save)
-            st.success("¡Datos guardados con éxito!")
-            st.rerun()
+            if not df_save.empty:
+                df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
+                conn.update(data=df_save)
+                st.success("¡Guardado!")
+                st.rerun()
+            else:
+                st.warning("No hay datos válidos para guardar.")
         except Exception as e:
-            st.error("❌ ERROR DE PERMISOS DE GOOGLE")
-            st.warning("Google Sheets no permite 'Escribir' datos mediante un link público. Para solucionar esto DEBES usar el archivo JSON de Service Account o conectar vía Privada.")
-            st.info("Mientras tanto, tus datos se muestran pero no se pueden guardar permanentemente en el Excel desde aquí.")
-
+            st.error(f"Error al guardar: {e}")
 
 
 with tab_analisis:
