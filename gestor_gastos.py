@@ -22,34 +22,55 @@ CATEGORIAS = ["Supermercado/Despensa", "Software/Suscripciones", "Alimentos/Rest
 METODOS = ["Manual/Físico", "Automático"]
 TIPOS = ["Gasto", "Abono"]
 
+import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import os
+from datetime import datetime
+
+st.set_page_config(page_title="Mi Bitácora Pro", layout="wide")
+st.title("📝 Gestor de Gastos en la Nube")
+
+# --- FUNCIONES DE SOPORTE ---
+def a_float(v):
+    try:
+        if pd.isna(v) or str(v).strip() == "": return 0.0
+        return float(str(v).replace(',', '').replace('$', '').replace(' ', '').strip())
+    except: return 0.0
+
+# --- CONFIGURACIÓN ---
+CATEGORIAS = ["Supermercado/Despensa", "Software/Suscripciones", "Alimentos/Restaurantes", "Servicios", "Préstamos", "Viajes", "Salud", "Transporte", "Seguros", "Compras/Otros", "Pagos Realizados"]
+METODOS = ["Manual/Físico", "Automático"]
+TIPOS = ["Gasto", "Abono"]
+
 # --- CONEXIÓN A GOOGLE SHEETS ---
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
-    df_raw = conn.read()
+    # TTL=0 para que siempre refresque los datos de la nube
+    df_raw = conn.read(ttl=0)
     
-    # Limpieza y preparación del DataFrame
-    if df_raw is not None and not df_raw.empty:
-        df_man = df_raw.dropna(how='all').copy()
-        # Asegurar columnas
-        columnas_req = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
-        for c in columnas_req:
-            if c not in df_man.columns: df_man[c] = None
+    if df_raw is not None:
+        # LIMPIEZA DE COLUMNAS: Forzar nombres exactos sin espacios
+        df_raw.columns = [str(c).strip() for c in df_raw.columns]
         
-        # Limpiar espacios para que coincidan con las listas de los selectores
-        df_man['Tipo'] = df_man['Tipo'].astype(str).str.strip()
-        df_man['Categoria'] = df_man['Categoria'].astype(str).str.strip()
-        df_man['Metodo_Pago'] = df_man['Metodo_Pago'].astype(str).str.strip()
+        # Filtrar solo las columnas que nos interesan
+        cols_ok = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
+        df_man = df_raw[cols_ok].copy() if all(c in df_raw.columns for c in cols_ok) else df_raw.copy()
+        
+        # LIMPIEZA DE CONTENIDO: Quitar espacios que rompen los selectores
+        for col in ["Tipo", "Categoria", "Metodo_Pago"]:
+            if col in df_man.columns:
+                df_man[col] = df_man[col].astype(str).str.strip()
+        
         df_man['Fecha'] = pd.to_datetime(df_man['Fecha'], errors='coerce')
         df_man['Monto'] = df_man['Monto'].apply(a_float)
     else:
-        df_man = pd.DataFrame(columns=["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"])
-
-    # Cargar saldo base del banco (archivo local en GitHub o PC)
-    df_res = pd.read_csv("resumen_mensual.csv") if os.path.exists("resumen_mensual.csv") else pd.DataFrame()
-    disponible_banco = a_float(df_res.iloc[0]['CreditoDisponible']) if not df_res.empty else 0.0
+        df_man = pd.DataFrame(columns=cols_ok)
 
 except Exception as e:
-    st.error(f"Error de conexión o datos: {e}")
+    st.error(f"Error al leer de Google Sheets. Verifica que los títulos en el Excel sean exactamente: Fecha, Concepto, Monto, Tipo, Categoria, Metodo_Pago")
     st.stop()
 
 # --- INTERFAZ ---
@@ -59,38 +80,33 @@ with tab_bitacora:
     st.subheader("Entrada de Movimientos")
     
     df_editado = st.data_editor(
-        df_man[["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]],
+        df_man,
         num_rows="dynamic",
         width="stretch",
         column_config={
-            "Fecha": st.column_config.DateColumn("Fecha", format="DD-MM-YYYY", required=True),
-            "Tipo": st.column_config.SelectboxColumn("Tipo", options=TIPOS, required=True),
-            "Metodo_Pago": st.column_config.SelectboxColumn("Método", options=METODOS, required=True),
-            "Categoria": st.column_config.SelectboxColumn("Categoría", options=CATEGORIAS, required=True),
-            "Monto": st.column_config.NumberColumn("Monto", format="$%.2f", min_value=0.0),
-            "Concepto": st.column_config.TextColumn("Concepto")
+            "Fecha": st.column_config.DateColumn("Fecha", format="DD-MM-YYYY"),
+            "Tipo": st.column_config.SelectboxColumn("Tipo", options=TIPOS),
+            "Metodo_Pago": st.column_config.SelectboxColumn("Método", options=METODOS),
+            "Categoria": st.column_config.SelectboxColumn("Categoría", options=CATEGORIAS),
+            "Monto": st.column_config.NumberColumn("Monto", format="$%.2f")
         },
-        key="editor_full"
+        key="editor_v5"
     )
     
-    # Totales rápidos
-    if not df_editado.empty:
-        tg_temp = df_editado[df_editado['Tipo'] == 'Gasto']['Monto'].sum()
-        ta_temp = df_editado[df_editado['Tipo'] == 'Abono']['Monto'].sum()
-        st.markdown(f"""
-        <div style="background-color:#f0f2f6; padding:10px; border-radius:10px;">
-            <b>Resumen en Tabla:</b> Gastos <span style="color:red">${tg_temp:,.2f}</span> | 
-            Abonos <span style="color:green">${ta_temp:,.2f}</span> | 
-            Balance: <b>${tg_temp-ta_temp:,.2f}</b>
-        </div>
-        """, unsafe_allow_html=True)
+    if st.button("💾 GUARDAR EN LA NUBE"):
+        try:
+            df_save = df_editado.dropna(subset=['Fecha', 'Monto'], how='any').copy()
+            df_save['Fecha'] = df_save['Fecha'].dt.strftime('%Y-%m-%d')
+            # Intentar actualizar
+            conn.update(data=df_save)
+            st.success("¡Datos guardados con éxito!")
+            st.rerun()
+        except Exception as e:
+            st.error("❌ ERROR DE PERMISOS DE GOOGLE")
+            st.warning("Google Sheets no permite 'Escribir' datos mediante un link público. Para solucionar esto DEBES usar el archivo JSON de Service Account o conectar vía Privada.")
+            st.info("Mientras tanto, tus datos se muestran pero no se pueden guardar permanentemente en el Excel desde aquí.")
 
-    if st.button("💾 GUARDAR CAMBIOS EN LA NUBE"):
-        df_save = df_editado.dropna(subset=['Fecha', 'Monto'], how='any').copy()
-        df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
-        conn.update(data=df_save)
-        st.success("¡Sincronizado con Google Sheets!")
-        st.rerun()
+
 
 with tab_analisis:
     if not df_man.dropna(subset=['Monto']).empty:
