@@ -17,19 +17,28 @@ def a_float(v):
         return float(clean_v)
     except: return 0.0
 
-# --- CONEXIÓN A GOOGLE SHEETS (Reemplaza al CSV local) ---
+# --- CONEXIÓN A GOOGLE SHEETS ---
 try:
-    # Creamos la conexión usando el link que pusiste en 'Secrets'
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # Leemos los datos directamente de la nube
     df_man = conn.read()
     
-    # Limpieza básica de los datos de la nube
-    if not df_man.empty:
-        df_man['Fecha'] = pd.to_datetime(df_man['Fecha'], errors='coerce')
-        df_man['Monto'] = df_man['Monto'].apply(a_float)
+    # Si la hoja está vacía o mal formada, forzamos las columnas correctas
+    columnas_requeridas = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
+    
+    if df_man is None or df_man.empty:
+        df_man = pd.DataFrame(columns=columnas_requeridas)
+    else:
+        # Si faltan columnas, las añadimos vacías para evitar el KeyError
+        for col in columnas_requeridas:
+            if col not in df_man.columns:
+                df_man[col] = None
+
+    # Limpieza de datos
+    df_man['Fecha'] = pd.to_datetime(df_man['Fecha'], errors='coerce')
+    df_man['Monto'] = df_man['Monto'].apply(a_float)
+    
 except Exception as e:
-    st.error(f"Error de conexión a Google Sheets: {e}")
+    st.error(f"Error de conexión o formato: {e}")
     st.stop()
 
 # --- CONFIGURACIÓN ---
