@@ -6,9 +6,6 @@ import plotly.graph_objects as go
 import os
 from datetime import datetime
 
-st.set_page_config(page_title="Mi Bitácora Pro", layout="wide")
-st.title("📝 Gestor de Gastos en la Nube")
-
 # --- FUNCIONES DE SOPORTE ---
 def a_float(v):
     try:
