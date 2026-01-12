@@ -45,29 +45,36 @@ TIPOS = ["Gasto", "Abono"]
 # --- CONEXIÓN A GOOGLE SHEETS ---
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # TTL=0 para que siempre refresque los datos de la nube
     df_raw = conn.read(ttl=0)
     
     if df_raw is not None:
-        # LIMPIEZA DE COLUMNAS: Forzar nombres exactos sin espacios
+        # Esto limpia automáticamente cualquier espacio extra en los títulos del Excel
         df_raw.columns = [str(c).strip() for c in df_raw.columns]
         
-        # Filtrar solo las columnas que nos interesan
-        cols_ok = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
-        df_man = df_raw[cols_ok].copy() if all(c in df_raw.columns for c in cols_ok) else df_raw.copy()
+        cols_necesarias = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
         
-        # LIMPIEZA DE CONTENIDO: Quitar espacios que rompen los selectores
+        # Verificamos si faltan columnas y avisamos cuáles son
+        faltantes = [c for c in cols_necesarias if c not in df_raw.columns]
+        if faltantes:
+            st.error(f"⚠️ Faltan estas columnas en tu Excel: {', '.join(faltantes)}")
+            st.info(f"Columnas detectadas actualmente: {list(df_raw.columns)}")
+            st.stop()
+            
+        df_man = df_raw[cols_necesarias].copy()
+        
+        # Limpieza de datos
         for col in ["Tipo", "Categoria", "Metodo_Pago"]:
-            if col in df_man.columns:
-                df_man[col] = df_man[col].astype(str).str.strip()
+            df_man[col] = df_man[col].astype(str).str.strip()
         
         df_man['Fecha'] = pd.to_datetime(df_man['Fecha'], errors='coerce')
-        df_man['Monto'] = df_man['Monto'].apply(a_float)
+        df_man['Monto'] = pd.to_numeric(df_man['Monto'], errors='coerce').fillna(0.0)
     else:
-        df_man = pd.DataFrame(columns=cols_ok)
+        df_man = pd.DataFrame(columns=cols_necesarias)
+
+    disponible_banco = 20000.0 
 
 except Exception as e:
-    st.error(f"Error al leer de Google Sheets. Verifica que los títulos en el Excel sean exactamente: Fecha, Concepto, Monto, Tipo, Categoria, Metodo_Pago")
+    st.error(f"Error de conexión: {e}")
     st.stop()
 
 # --- INTERFAZ ---
