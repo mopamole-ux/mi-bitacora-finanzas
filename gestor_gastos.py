@@ -6,6 +6,8 @@ import plotly.graph_objects as go
 import os
 from datetime import datetime
 
+st.set_page_config(page_title="Mi Bitácora Pro", layout="wide")
+
 # --- FUNCIONES DE SOPORTE ---
 def a_float(v):
     try:
@@ -18,13 +20,7 @@ CATEGORIAS = ["Supermercado/Despensa", "Software/Suscripciones", "Alimentos/Rest
 METODOS = ["Manual/Físico", "Automático"]
 TIPOS = ["Gasto", "Abono"]
 
-import streamlit as st
-from streamlit_gsheets import GSheetsConnection
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 
-st.set_page_config(page_title="Mi Bitácora Pro", layout="wide")
 
 # --- CONEXIÓN SEGURA ---
 try:
