@@ -50,77 +50,72 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="Mi Bitácora Pro", layout="wide")
 
-# --- CONEXIÓN ---
+# --- CONEXIÓN SEGURA ---
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
+    df_raw = conn.read(ttl=0) # ttl=0 para refrescar siempre
     
-    # Intentamos leer la hoja
-    df_raw = conn.read(ttl=0)
-    
-    # Definimos las columnas que DEBEN existir
-    cols_necesarias = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
+    COLUMNAS = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
     
     if df_raw is not None and not df_raw.empty:
-        # Limpiar títulos
         df_raw.columns = [str(c).strip() for c in df_raw.columns]
+        for c in COLUMNAS:
+            if c not in df_raw.columns: df_raw[c] = ""
+        df_man = df_raw[COLUMNAS].copy()
         
-        # Si faltan columnas, las creamos vacías para que no truene
-        for c in cols_necesarias:
-            if c not in df_raw.columns:
-                df_raw[c] = None
-        
-        df_man = df_raw[cols_necesarias].copy()
-        
-        # Limpieza agresiva de datos para los selectores
+        # Limpieza para que coincida con los selectores
         for col in ["Tipo", "Categoria", "Metodo_Pago"]:
             df_man[col] = df_man[col].astype(str).str.strip().replace("nan", "")
-            
+        
         df_man['Fecha'] = pd.to_datetime(df_man['Fecha'], errors='coerce')
         df_man['Monto'] = pd.to_numeric(df_man['Monto'], errors='coerce').fillna(0.0)
     else:
-        # Si la hoja está vacía, creamos un DataFrame con la estructura correcta
-        df_man = pd.DataFrame(columns=cols_necesarias)
+        df_man = pd.DataFrame(columns=COLUMNAS)
 
-    disponible_banco = 20000.0
+    disponible_banco = 20000.0 # Ajusta tu crédito aquí
 
 except Exception as e:
-    st.error("🚨 Error de conexión. Revisa tus Secrets y que hayas compartido la hoja con el correo del bot.")
-    st.exception(e) # Esto mostrará el error real en rojo
+    st.error("Error de conexión. Asegúrate de compartir la hoja con: gestor-gastos@bitacora-financiera.iam.gserviceaccount.com")
+    st.exception(e)
     st.stop()
 
 # --- INTERFAZ ---
-st.title("📝 Gestor de Gastos")
-tab_bitacora, tab_analisis = st.tabs(["⌨️ Registro", "📊 Análisis"])
+tab1, tab2 = st.tabs(["⌨️ Registro", "📊 Análisis"])
 
-with tab_bitacora:
+with tab1:
     df_editado = st.data_editor(
-        df_man,
-        num_rows="dynamic",
-        width="stretch",
+        df_man, num_rows="dynamic", width="stretch",
         column_config={
             "Fecha": st.column_config.DateColumn("Fecha", format="DD-MM-YYYY"),
             "Tipo": st.column_config.SelectboxColumn("Tipo", options=["Gasto", "Abono"]),
             "Metodo_Pago": st.column_config.SelectboxColumn("Método", options=["Manual/Físico", "Automático"]),
-            "Categoria": st.column_config.SelectboxColumn("Categoría", options=["Servicios", "Supermercado/Despensa", "Alimentos/Restaurantes", "Software/Suscripciones", "Préstamos", "Viajes", "Salud", "Transporte", "Seguros", "Compras/Otros", "Pagos Realizados"]),
+            "Categoria": st.column_config.SelectboxColumn("Categoría", options=["Servicios", "Supermercado/Despensa", "Alimentos/Restaurantes", "Software/Suscripciones", "Otros"]),
             "Monto": st.column_config.NumberColumn("Monto", format="$%.2f")
-        },
-        key="editor_vFinal"
+        }
     )
     
-    if st.button("💾 GUARDAR CAMBIOS"):
-        try:
-            # Quitamos filas vacías antes de guardar
-            df_save = df_editado.dropna(subset=['Fecha', 'Monto'], how='any').copy()
-            if not df_save.empty:
-                df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
-                conn.update(data=df_save)
-                st.success("¡Guardado!")
-                st.rerun()
-            else:
-                st.warning("No hay datos válidos para guardar.")
-        except Exception as e:
-            st.error(f"Error al guardar: {e}")
+    if st.button("💾 GUARDAR"):
+        df_save = df_editado.dropna(subset=['Fecha', 'Monto']).copy()
+        df_save['Fecha'] = df_save['Fecha'].dt.strftime('%Y-%m-%d')
+        conn.update(data=df_save)
+        st.success("¡Sincronizado!")
+        st.rerun()
 
+with tab2:
+    if not df_man.dropna(subset=['Monto']).empty:
+        df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
+        # NORMALIZAR FECHA: Esto arregla tu gráfica (quita horas/minutos)
+        df_p['Fecha'] = df_p['Fecha'].dt.normalize()
+        
+        # Agrupar por día para que no salgan líneas verticales amontonadas
+        diario = df_p.groupby('Fecha').apply(lambda x: x[x['Tipo']=='Abono']['Monto'].sum() - x[x['Tipo']=='Gasto']['Monto'].sum()).reset_index(name='Efecto')
+        diario = diario.sort_values('Fecha')
+        diario['Saldo'] = disponible_banco + diario['Efecto'].cumsum()
+
+        fig = px.area(diario, x='Fecha', y='Saldo', line_shape="hv", title="Trayectoria por Día")
+        fig.update_xaxes(dtick="D1", tickformat="%d %b") # Forzar marcas diarias
+        st.plotly_chart(fig, use_container_width=True)
+        
 
 with tab_analisis:
     if not df_man.dropna(subset=['Monto']).empty:
