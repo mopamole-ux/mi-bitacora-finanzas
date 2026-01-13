@@ -121,7 +121,9 @@ with tab_registro:
     c2.metric("🟢 Abonos", f"${int(a_actual):,}")
     c3.metric("💰 NETO", f"${int(disponible_final):,}", delta=f"{int(a_actual - g_actual):,}")
 
-    if st.button("💾 GUARDAR TODO EN GOOGLE SHEETS"):
+
+
+   if st.button("💾 GUARDAR TODO EN GOOGLE SHEETS"):
     # 1. Filtramos solo las filas que tienen datos esenciales
     df_save = df_editado.dropna(subset=['Fecha', 'Concepto']).copy()
     
@@ -146,6 +148,7 @@ with tab_registro:
             st.error(f"Error al guardar: {e}")
     else:
         st.warning("Escribe algo antes de intentar guardar.")
+
 
 with tab_analisis:
     # 1. Filtramos datos válidos (que tengan Fecha y Monto)
