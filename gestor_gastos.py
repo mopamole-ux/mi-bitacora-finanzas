@@ -79,24 +79,37 @@ with tab_bitacora:
     )
     
     if st.button("💾 Guardar Cambios en la Nube"):
-        # 1. Filtrar solo filas con datos reales
-        df_save = df_editado.dropna(subset=['Fecha', 'Monto'], how='any').copy()
+        # 1. Crear una copia para no afectar lo que ves en pantalla inmediatamente
+        df_save = df_editado.copy()
+        
+        # 2. Limpieza crítica: Eliminar filas donde falte la Fecha o el Monto
+        df_save = df_save.dropna(subset=['Fecha', 'Monto'], how='any')
         
         if not df_save.empty:
-            # 2. Formatear para Google Sheets
-            df_save['Fecha'] = df_save['Fecha'].dt.strftime('%Y-%m-%d')
-            df_save['Monto'] = df_save['Monto'].apply(float)
+            # --- CORRECCIÓN DE FECHA ---
+            # Nos aseguramos de que sea un objeto datetime y luego lo pasamos a texto ISO
+            df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
             
-            # 3. EJECUTAR ACTUALIZACIÓN FORZADA
+            # Aseguramos que el resto de datos sean strings o números limpios
+            df_save['Monto'] = df_save['Monto'].apply(float)
+            df_save['Concepto'] = df_save['Concepto'].astype(str)
+            
             try:
+                # 3. EJECUTAR ACTUALIZACIÓN
+                # Usamos el nombre de la conexión definida arriba
                 conn.update(data=df_save)
-                st.success("✅ ¡Datos guardados exitosamente en Google Sheets!")
+                
+                st.success(f"✅ ¡Se registraron {len(df_save)} movimientos correctamente!")
                 st.balloons()
+                
+                # 4. Forzar recarga para leer los nuevos datos de la nube
+                st.cache_data.clear() # Limpia cualquier caché de lectura
                 st.rerun()
+                
             except Exception as save_error:
                 st.error(f"Error al escribir en la hoja: {save_error}")
         else:
-            st.warning("No hay datos nuevos para guardar.")
+            st.warning("⚠️ No se puede guardar: Asegúrate de que las filas tengan Fecha y Monto.")
 
 with tab_analisis:
     # Mantenemos tu lógica de gráficas intacta aquí abajo...
