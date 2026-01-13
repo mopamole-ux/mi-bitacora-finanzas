@@ -15,6 +15,11 @@ st.title("🍕 Bitácora de Gorditos 🍔")
 st.markdown("""
     <style>
     .main { background-color: #fffaf0; }
+    
+    img {
+        max-height: 300px;
+        width: auto;
+    }
     .stMetric {
         background-color: #ffffff;
         padding: 15px;
