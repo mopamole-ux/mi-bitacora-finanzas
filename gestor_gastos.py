@@ -18,7 +18,7 @@ st.markdown("""
     
     img {
         max-height: 300px;
-        width: auto;
+        width: 100%;
     }
     .stMetric {
         background-color: #ffffff;
