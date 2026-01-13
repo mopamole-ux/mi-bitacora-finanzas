@@ -6,7 +6,8 @@ import plotly.graph_objects as go
 import os
 from datetime import datetime
 
-st.set_page_config(page_title="Mi Bitácora Pro", layout="wide")
+st.set_page_config(page_title="Mi Bitácora de Gastos", layout="wide")
+st.title("📝 Gestor de Gastos Personales (Nube)")
 
 # --- 1. CONFIGURACIÓN DE SEGURIDAD (IMPORTANTE) ---
 # Esto limpia la llave de tus Secrets para que Google permita la ESCRITURA
