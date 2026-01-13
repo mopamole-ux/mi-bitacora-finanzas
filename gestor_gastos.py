@@ -2,13 +2,14 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import plotly.express as px
-import time
 
-# 1. CONFIGURACIÓN INICIAL
+# 1. CONFIGURACIÓN ÚNICA
 st.set_page_config(page_title="Bitácora de Gorditos 🍔", layout="wide")
 
+# --- BANNER (Actualizado a width='stretch') ---
 URL_BANNER = "https://lh3.googleusercontent.com/d/11Rdr2cVYIypLjmSp9jssuvoOxQ-kI1IZ"
 st.image(URL_BANNER, width='stretch')
+
 st.title("🍕 Bitácora de Gorditos 🍔")
 
 # --- 2. CONEXIÓN ---
@@ -19,37 +20,34 @@ COLUMNAS_MAESTRAS = [
     "Categoria", "Tipo_Pago", "Metodo_Pago", "Responsable"
 ]
 
-# --- 3. LECTURA DE DATOS CON CACHÉ (Para evitar el error 429) ---
+# --- 3. LECTURA DE DATOS ---
 try:
-    # Usamos ttl=300 (5 minutos). La app solo leerá de Google cada 5 min 
-    # a menos que nosotros forcemos la limpieza.
-    df_config = conn.read(worksheet="Config", ttl=300)
+    # Leer Configuración
+    df_config = conn.read(worksheet="Config", ttl=0)
     if not df_config.empty:
         saldo_base_valor = float(df_config.iloc[0, 0])
-        limite_atracon = float(df_config.iloc[0, 1]) if len(df_config.columns) > 1 else 15000.0
+        limite_atracón = float(df_config.iloc[0, 1]) if len(df_config.columns) > 1 else 15000.0
     else:
-        saldo_base_valor, limite_atracon = 20000.0, 15000.0
+        saldo_base_valor, limite_atracón = 20000.0, 15000.0
 
-    df_raw = conn.read(ttl=300)
+    # Leer Movimientos
+    df_man = conn.read(ttl=0)
     
-    if df_raw is not None and not df_raw.empty:
-        df_raw.columns = [str(c).strip() for c in df_raw.columns]
-        for col in COLUMNAS_MAESTRAS:
-            if col not in df_raw.columns:
-                df_raw[col] = ""
-        df_man = df_raw[COLUMNAS_MAESTRAS].copy()
+    if df_man is not None and not df_man.empty:
+        df_man.columns = [str(c).strip() for c in df_man.columns]
+        for c in COLUMNAS_MAESTRAS:
+            if c not in df_man.columns:
+                df_man[c] = ""
+        
+        df_man = df_man[COLUMNAS_MAESTRAS].copy()
         df_man['Fecha'] = pd.to_datetime(df_man['Fecha'], errors='coerce')
         df_man['Monto'] = pd.to_numeric(df_man['Monto'], errors='coerce').fillna(0.0)
     else:
         df_man = pd.DataFrame(columns=COLUMNAS_MAESTRAS)
 
 except Exception as e:
-    if "429" in str(e):
-        st.error("🚦 ¡Google está cansado! Espera 1 minuto y refresca la página.")
-        st.stop()
-    else:
-        st.error(f"Error: {e}")
-        st.stop()
+    st.error(f"Error al leer datos: {e}")
+    st.stop()
 
 # --- 4. SIDEBAR ---
 with st.sidebar:
@@ -80,38 +78,53 @@ with tab_reg:
         width="stretch",
         column_config={
             "Fecha": st.column_config.DateColumn("📅 Fecha", format="DD/MM/YYYY"),
-            "Monto": st.column_config.NumberColumn("💵 Monto", format="$%d"),
             "Tipo": st.column_config.SelectboxColumn("✨ Tipo", options=["Gasto", "Abono"]),
+            "Monto": st.column_config.NumberColumn("💵 Monto", format="$%d"),
+            "Categoria": st.column_config.SelectboxColumn("📂 Categoría", options=["Super", "Software", "Suscripciones", "Restaurantes", "Servicios", "Salud", "Préstamos", "Pago TDC", "Salarios", "Viajes", "Otros"]),
+            "Tipo_Pago": st.column_config.SelectboxColumn("🪙 Tipo pago", options=["Manual", "Automático"]),
+            "Metodo_Pago": st.column_config.SelectboxColumn("💳 Forma pago", options=["TDC", "Efectivo", "TDD"]),
             "Responsable": st.column_config.SelectboxColumn("👤 Responsable", options=["Gordify", "Mon"])
         },
-        key="editor_2026_quota_fix"
+        key="editor_2026_v1"
     )
 
+    # Totales
+    g_act = df_editado[df_editado['Tipo'] == 'Gasto']['Monto'].sum()
+    a_act = df_editado[df_editado['Tipo'] == 'Abono']['Monto'].sum()
+    st.metric("💰 NETO PROYECTADO", f"${int(nuevo_saldo + a_act - g_act):,}")
+
     if st.button("💾 GUARDAR TODO"):
-        df_save = df_editado.dropna(subset=['Fecha', 'Concepto']).copy()
+        # Limpieza estricta: Solo filas con Fecha y Monto
+        df_save = df_editado.dropna(subset=['Fecha', 'Monto']).copy()
         
         if not df_save.empty:
+            # Convertir Fecha a Texto ISO para Google
             df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
             df_final = df_save[COLUMNAS_MAESTRAS]
             
             try:
                 conn.update(data=df_final)
-                st.cache_data.clear() # Forzamos recarga tras guardar
-                st.success("✅ Guardado. Google Sheets actualizado.")
-                time.sleep(1) # Pausa pequeña para no saturar
+                st.cache_data.clear()
+                st.success("✅ Guardado correctamente")
                 st.rerun()
             except Exception as e:
                 st.error(f"Error al guardar: {e}")
 
 with tab_ana:
-    st.info("💡 Si los datos no aparecen, espera un momento; Google está procesando tu última subida.")
-    # Lógica de análisis simplificada para evitar errores de 2026
     df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
     if not df_p.empty:
         df_p['Fecha_DT'] = pd.to_datetime(df_p['Fecha']).dt.normalize()
-        tot_g = df_p[df_p['Tipo'] == 'Gasto']['Monto'].sum()
-        st.subheader(f"Gastado Total: ${int(tot_g):,}")
         
-        # Gráfica rápida
-        fig = px.line(df_p.sort_values('Fecha'), x='Fecha', y='Monto', color='Tipo', title="Movimientos")
+        # Gráfica corregida para evitar el "FutureWarning"
+        diario = df_p.sort_values('Fecha_DT')
+        diario['Valor'] = diario.apply(lambda x: x['Monto'] if x['Tipo'] == 'Abono' else -x['Monto'], axis=1)
+        
+        # Agrupamos por fecha sumando el valor neto del día
+        grafica_df = diario.groupby('Fecha_DT')['Valor'].sum().reset_index()
+        grafica_df['Saldo_Acumulado'] = nuevo_saldo + grafica_df['Valor'].cumsum()
+
+        fig = px.area(grafica_df, x='Fecha_DT', y='Saldo_Acumulado', line_shape="hv", title="Trayectoria del Dinero")
+        fig.update_traces(line_color='#FF5733')
         st.plotly_chart(fig, width='stretch')
+    else:
+        st.info("Sin datos para graficar.")
