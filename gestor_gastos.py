@@ -156,9 +156,6 @@ with tab_analisis:
 
         # --- FILA 2: GRÁFICA DE ESCALERA ---
 
-with tab2:
-    if not df_man.dropna(subset=['Fecha', 'Monto']).empty:
-        # --- PREPARACIÓN PARA GRÁFICO DIARIO ---
         df_p = df_man.dropna(subset=['Fecha', 'Monto']).copy()
         
         # Forzar a que la fecha sea solo el DÍA (elimina horas/minutos)
