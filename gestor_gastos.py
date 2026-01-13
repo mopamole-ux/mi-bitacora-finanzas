@@ -54,14 +54,21 @@ except Exception as e:
 # --- 4. SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Configuración")
-    n_saldo = st.number_input("💰 Saldo Base", value=int(saldo_base_valor), step=100)
-    n_limite = st.number_input("⚠️ Límite Gasto", value=int(limite_atracon), step=500)
+    nuevo_saldo = st.number_input("💰 Saldo Inicial", value=int(saldo_base_valor), step=100, format="%d")
+    nuevo_limite = st.number_input("⚠️ Límite de Gasto", value=int(limite_atracón), step=500, format="%d")
     
     if st.button("🍳 Guardar Config"):
-        df_conf_save = pd.DataFrame({"SaldoBase": [n_saldo], "Limite": [n_limite]})
+        df_conf_save = pd.DataFrame({"SaldoBase": [nuevo_saldo], "Limite": [nuevo_limite]})
         conn.update(worksheet="Config", data=df_conf_save)
-        st.cache_data.clear() # Limpia el caché para ver el cambio
+        st.cache_data.clear()
         st.rerun()
+
+    st.divider()
+    st.subheader("🌡️ Termómetro")
+    gastos_calc = df_man[df_man['Tipo'] == 'Gasto']['Monto'].sum()
+    progreso = min(gastos_calc / nuevo_limite, 1.0) if nuevo_limite > 0 else 0
+    st.progress(progreso)
+    st.write(f"Llevan ${int(gastos_calc):,} de ${int(nuevo_limite):,}")
 
 # --- 5. REGISTRO ---
 tab_reg, tab_ana = st.tabs(["📝 Registro", "📊 Análisis"])
