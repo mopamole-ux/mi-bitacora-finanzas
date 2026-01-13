@@ -112,30 +112,13 @@ with tab_reg:
             st.warning("⚠️ Escribe al menos la Fecha y el Concepto.")
 
 with tab_ana:
-    # Usamos df_man que ya tiene las fechas limpias de la lectura
+    # Lógica de análisis simplificada para evitar errores de 2026
     df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
     if not df_p.empty:
-        # Para la gráfica, normalizamos la fecha a "solo día"
-        df_p['Fecha_Grafica'] = pd.to_datetime(df_p['Fecha']).dt.normalize()
-        
+        df_p['Fecha_DT'] = pd.to_datetime(df_p['Fecha']).dt.normalize()
         tot_g = df_p[df_p['Tipo'] == 'Gasto']['Monto'].sum()
-        tot_a = df_p[df_p['Tipo'] == 'Abono']['Monto'].sum()
-        saldo_global = nuevo_saldo - tot_g + tot_a
-
-        st.subheader("🍴 Estado de Nuestra Fortuna")
-        m1, m2, m3 = st.columns(3)
-        m1.metric("💰 Fondo Inicial", f"${int(nuevo_saldo):,}")
-        m2.metric("🍗 Gastado Total", f"${int(tot_g):,}")
-        m3.metric("🥗 Disponible Real", f"${int(saldo_global):,}")
-
-        # Gráfica de Escalera corregida
-        diario = df_p.groupby('Fecha_Grafica').apply(lambda x: (x[x['Tipo']=='Abono']['Monto'].sum() - x[x['Tipo']=='Gasto']['Monto'].sum())).reset_index(name='Efecto')
-        diario = diario.sort_values('Fecha_Grafica')
-        diario['Saldo_Proyectado'] = nuevo_saldo + diario['Efecto'].cumsum()
-
-        fig_line = px.area(diario, x='Fecha_Grafica', y='Saldo_Proyectado', line_shape="hv", markers=True)
-        fig_line.update_traces(line_color='#FF5733', fillcolor='rgba(255, 87, 51, 0.2)')
-        fig_line.update_xaxes(tickformat="%d/%m/%Y", title="Día")
-        st.plotly_chart(fig_line, use_container_width=True)
-    else:
-        st.info("No hay datos suficientes para las gráficas.")
+        st.subheader(f"Gastado Total: ${int(tot_g):,}")
+        
+        # Gráfica rápida
+        fig = px.line(df_p.sort_values('Fecha'), x='Fecha', y='Monto', color='Tipo', title="Movimientos")
+        st.plotly_chart(fig, width='stretch')
