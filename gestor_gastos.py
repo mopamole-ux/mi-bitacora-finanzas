@@ -53,7 +53,7 @@ try:
 
     # Leer Movimientos
     df_man = conn.read(ttl=0)
-    COLUMNAS = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
+    COLUMNAS = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Tipo_Pago", "Metodo_Pago", "Responsable"]
     
     if df_man is not None and not df_man.empty:
         df_man.columns = [str(c).strip() for c in df_man.columns]
