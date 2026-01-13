@@ -3,26 +3,37 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import os
 
 st.set_page_config(page_title="Mi Bitácora Pro", layout="wide")
 
-# --- LIMPIEZA AUTOMÁTICA DE LLAVE (Anti-Incorrect Padding) ---
+# --- PROCESAMIENTO SEGURO DE LA LLAVE ---
+# En lugar de modificar st.secrets, creamos un diccionario con la llave limpia
 if "connections" in st.secrets and "gsheets" in st.secrets.connections:
-    s = st.secrets.connections.gsheets
-    # Reemplazamos posibles errores de pegado de saltos de línea
-    if hasattr(s, "private_key"):
-        s.private_key = s.private_key.replace("\\n", "\n")
+    secret_dict = dict(st.secrets.connections.gsheets)
+    if "private_key" in secret_dict:
+        # Limpiamos la llave en una variable local
+        secret_dict["private_key"] = secret_dict["private_key"].replace("\\n", "\n")
+else:
+    st.error("No se encontraron los Secrets configurados.")
+    st.stop()
 
-# --- FUNCIONES ---
+# --- FUNCIONES DE SOPORTE ---
 def a_float(v):
     try:
         if pd.isna(v) or str(v).strip() == "": return 0.0
         return float(str(v).replace(',', '').replace('$', '').replace(' ', '').strip())
     except: return 0.0
 
+# --- CONFIGURACIÓN ---
+CATEGORIAS = ["Supermercado/Despensa", "Software/Suscripciones", "Alimentos/Restaurantes", "Servicios", "Préstamos", "Viajes", "Salud", "Transporte", "Seguros", "Compras/Otros", "Pagos Realizados"]
+METODOS = ["Manual/Físico", "Automático"]
+TIPOS = ["Gasto", "Abono"]
+
 # --- CONEXIÓN ---
 try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
+    # Pasamos el diccionario limpio a la conexión
+    conn = st.connection("gsheets", type=GSheetsConnection, **secret_dict)
     df_raw = conn.read(ttl=0)
     COLUMNAS = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
     
@@ -32,6 +43,7 @@ try:
             if c not in df_raw.columns: df_raw[c] = ""
         df_man = df_raw[COLUMNAS].copy()
         
+        # Limpieza de datos
         for col in ["Tipo", "Categoria", "Metodo_Pago"]:
             df_man[col] = df_man[col].astype(str).str.strip().replace("nan", "")
         
@@ -43,31 +55,33 @@ try:
     disponible_banco = 20000.0 
 
 except Exception as e:
-    st.error("Error de conexión. Revisa los Secrets.")
+    st.error("Error de conexión. Verifica que el JSON en Secrets sea correcto.")
     st.exception(e)
     st.stop()
 
 # --- INTERFAZ ---
 st.title("📝 Mi Bitácora Financiera")
-tab1, tab2 = st.tabs(["⌨️ Registro", "📊 Análisis"])
+tab1, tab2 = st.tabs(["⌨️ Registro", "📊 Análisis Profundo"])
 
 with tab1:
+    st.subheader("Entrada de Movimientos")
     df_editado = st.data_editor(
         df_man, num_rows="dynamic", width="stretch",
         column_config={
             "Fecha": st.column_config.DateColumn("Fecha", format="DD-MM-YYYY"),
-            "Tipo": st.column_config.SelectboxColumn("Tipo", options=["Gasto", "Abono"]),
-            "Metodo_Pago": st.column_config.SelectboxColumn("Método", options=["Manual/Físico", "Automático"]),
-            "Categoria": st.column_config.SelectboxColumn("Categoría", options=["Servicios", "Supermercado/Despensa", "Alimentos/Restaurantes", "Software/Suscripciones", "Otros"]),
+            "Tipo": st.column_config.SelectboxColumn("Tipo", options=TIPOS),
+            "Metodo_Pago": st.column_config.SelectboxColumn("Método", options=METODOS),
+            "Categoria": st.column_config.SelectboxColumn("Categoría", options=CATEGORIAS),
             "Monto": st.column_config.NumberColumn("Monto", format="$%.2f")
-        }
+        },
+        key="editor_final_v7"
     )
     
-    if st.button("💾 GUARDAR"):
+    if st.button("💾 GUARDAR CAMBIOS"):
         df_save = df_editado.dropna(subset=['Fecha', 'Monto']).copy()
         df_save['Fecha'] = df_save['Fecha'].dt.strftime('%Y-%m-%d')
         conn.update(data=df_save)
-        st.success("¡Guardado!")
+        st.success("¡Sincronizado con Google Sheets!")
         st.rerun()
 
 with tab2:
@@ -83,17 +97,28 @@ with tab2:
         # Métricas
         c1, c2 = st.columns([2, 1])
         with c1:
+            st.subheader("📉 Resumen")
             m1, m2, m3 = st.columns(3)
-            m1.metric("Límite", f"${disponible_banco:,.2f}")
+            m1.metric("Límite Base", f"${disponible_banco:,.2f}")
             m2.metric("Gastos", f"${total_g:,.2f}", delta_color="inverse")
             m3.metric("Disponible", f"${saldo_final:,.2f}")
         
+        with c2:
+            fig_gauge = go.Figure(go.Indicator(
+                mode = "gauge+number", value = min(uso_manual, 100),
+                title = {'text': "% Uso Crédito"},
+                gauge = {'bar': {'color': "#1f77b4"}}))
+            fig_gauge.update_layout(height=250, margin=dict(t=50, b=0))
+            st.plotly_chart(fig_gauge, use_container_width=True)
+
         # Gráfica de Escalera
+        st.divider()
         diario = df_p.groupby('Fecha_DT').apply(lambda x: x[x['Tipo']=='Abono']['Monto'].sum() - x[x['Tipo']=='Gasto']['Monto'].sum()).reset_index(name='Efecto')
         diario = diario.sort_values('Fecha_DT')
         diario['Saldo'] = disponible_banco + diario['Efecto'].cumsum()
 
         fig = px.area(diario, x='Fecha_DT', y='Saldo', line_shape="hv", title="Trayectoria del Disponible")
+        fig.update_traces(line_color='#28A745', fillcolor='rgba(40, 167, 69, 0.2)')
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Sin datos para analizar.")
