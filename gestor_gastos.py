@@ -93,41 +93,28 @@ with st.sidebar:
         st.info(f"Llevan ${int(gastos_totales):,} de ${int(nuevo_limite):,}")
 
 # --- INTERFAZ ---
-tab_registro, tab_analisis = st.tabs(["⌨️ Registro", "📊 Análisis"])
+st.title("🍕 Registro de Movimientos")
 
-with tab_registro:
-    df_editado = st.data_editor(
-        df_man[COLUMNAS],
-        num_rows="dynamic",
-        width="stretch",
-        column_config={
-            "Fecha": st.column_config.DateColumn("📅 Fecha", format="DD/MM/YYYY"),
+df_editado = st.data_editor(
+    df_man,
+    num_rows="dynamic",
+    width="stretch",
+    column_config={
+        "Fecha": st.column_config.DateColumn("📅 Fecha", format="DD/MM/YYYY"),
         "Tipo": st.column_config.SelectboxColumn("✨ Tipo", options=["Gasto", "Abono"]),
         "Categoria": st.column_config.SelectboxColumn("📂 Categoría", options=["Super", "Software", "Suscripciones", "Restaurantes", "Servicios", "Salud", "Préstamos", "Pago TDC", "Salarios", "Viajes", "Otros"]),
         "Tipo_Pago": st.column_config.SelectboxColumn("🪙 Tipo pago", options=["Manual", "Automático"]),
         "Metodo_Pago": st.column_config.SelectboxColumn("💳 Forma pago", options=["TDC", "Efectivo", "TDD"]),
         "Responsable": st.column_config.SelectboxColumn("👤 Responsable", options=["Gordify", "Mon"])
     },
-        key="editor_ultra_fix_v2" # Nueva clave para resetear caché en iPad
-    )
-    
-    # Totales rápidos
-    g_actual = df_editado[df_editado['Tipo'] == 'Gasto']['Monto'].sum()
-    a_actual = df_editado[df_editado['Tipo'] == 'Abono']['Monto'].sum()
-    disponible_final = nuevo_saldo + a_actual - g_actual
-    
-    c1, c2, c3 = st.columns(3)
-    c1.metric("🔴 Gastos", f"${int(g_actual):,}")
-    c2.metric("🟢 Abonos", f"${int(a_actual):,}")
-    c3.metric("💰 NETO", f"${int(disponible_final):,}", delta=f"{int(a_actual - g_actual):,}")
-
-
+    key="editor_ultra_fix_v2" # Nueva clave para resetear caché en iPad
+)
 
 if st.button("💾 GUARDAR TODO EN GOOGLE SHEETS"):
     # 1. Filtramos solo las filas que tienen datos esenciales
     df_save = df_editado.dropna(subset=['Fecha', 'Concepto']).copy()
     
-if not df_save.empty:
+    if not df_save.empty:
         # 2. Formateo de fecha estricto para Sheets
         df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
         
@@ -148,6 +135,17 @@ if not df_save.empty:
             st.error(f"Error al guardar: {e}")
     else:
         st.warning("Escribe algo antes de intentar guardar.")
+
+
+    # Totales rápidos
+    g_actual = df_editado[df_editado['Tipo'] == 'Gasto']['Monto'].sum()
+    a_actual = df_editado[df_editado['Tipo'] == 'Abono']['Monto'].sum()
+    disponible_final = nuevo_saldo + a_actual - g_actual
+    
+    c1, c2, c3 = st.columns(3)
+    c1.metric("🔴 Gastos", f"${int(g_actual):,}")
+    c2.metric("🟢 Abonos", f"${int(a_actual):,}")
+    c3.metric("💰 NETO", f"${int(disponible_final):,}", delta=f"{int(a_actual - g_actual):,}")
 
 
 with tab_analisis:
