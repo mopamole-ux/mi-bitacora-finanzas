@@ -21,7 +21,7 @@ else:
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
     
-    # Intentar leer Saldo Base de la pestaña 'Config'
+    # Leer Saldo Base de 'Config'
     try:
         df_config = conn.read(worksheet="Config", ttl=0)
         if not df_config.empty:
@@ -29,10 +29,9 @@ try:
         else:
             saldo_base_valor = 20000.0
     except:
-        st.warning("⚠️ No encontré la pestaña 'Config'. Usando saldo temporal.")
         saldo_base_valor = 20000.0
 
-    # Leer Movimientos Principales
+    # Leer Movimientos
     df_man = conn.read(ttl=0)
     COLUMNAS = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
     
