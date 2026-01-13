@@ -1,4 +1,4 @@
-import streamlit as st
+  import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import plotly.express as px
@@ -52,17 +52,24 @@ except Exception as e:
 # --- SIDEBAR: CONFIGURACIÓN DIVERTIDA ---
 with st.sidebar:
     st.header("👨‍🍳 El Chef del Dinero")
-    nuevo_saldo = st.number_input("💰 Ajustar Saldo Inicial", value=saldo_base_valor)
     
-    if st.button("🍳 Guardar Saldo en la Nube"):
+    # --- AJUSTE SOLICITADO: Salto de 100 en 100 y sin decimales (%d) ---
+    nuevo_saldo = st.number_input(
+        "💰 Saldo Inicial", 
+        value=int(saldo_base_valor), 
+        step=100, 
+        format="%d"
+    )
+    
+    if st.button("🍳 Guardar Saldo Base"):
         df_conf_save = pd.DataFrame({"SaldoBase": [nuevo_saldo]})
         try:
             conn.update(worksheet="Config", data=df_conf_save)
-            st.success("¡Saldo guardado para siempre!")
+            st.success("¡Caja Registradora actualizada!")
             st.cache_data.clear()
             st.rerun()
         except:
-            st.error("Error: ¿Creaste la pestaña 'Config' en tu Google Sheets?")
+            st.error("¿Creaste la pestaña 'Config' en tu Google Sheets?")
 
 # --- TABS ---
 tab_registro, tab_analisis = st.tabs(["📝 Anotar Pedido", "📊 ¿Cuánto nos comimos?"])
