@@ -61,7 +61,7 @@ with st.sidebar:
         st.rerun()
 
 # --- 5. REGISTRO ---
-tab_reg, tab_ana = st.tabs(["📝 Registro", "📊 Análisis"])
+tab_reg, tab_analisis = st.tabs(["📝 Registro", "📊 Análisis"])
 
 with tab_reg:
     st.info("💡 El ID se asignará automáticamente al presionar 'Guardar'.")
@@ -108,21 +108,31 @@ with tab_reg:
             except Exception as e:
                 st.error(f"Error al guardar: {e}")
 
-with tab_ana:
+with tab_analisis:
+    # Usamos df_man que ya tiene las fechas limpias de la lectura
     df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
     if not df_p.empty:
-        df_p['Fecha_DT'] = pd.to_datetime(df_p['Fecha']).dt.normalize()
+        # Para la gráfica, normalizamos la fecha a "solo día"
+        df_p['Fecha_Grafica'] = pd.to_datetime(df_p['Fecha']).dt.normalize()
         
-        # Gráfica corregida para evitar el "FutureWarning"
-        diario = df_p.sort_values('Fecha_DT')
-        diario['Valor'] = diario.apply(lambda x: x['Monto'] if x['Tipo'] == 'Abono' else -x['Monto'], axis=1)
-        
-        # Agrupamos por fecha sumando el valor neto del día
-        grafica_df = diario.groupby('Fecha_DT')['Valor'].sum().reset_index()
-        grafica_df['Saldo_Acumulado'] = nuevo_saldo + grafica_df['Valor'].cumsum()
+        tot_g = df_p[df_p['Tipo'] == 'Gasto']['Monto'].sum()
+        tot_a = df_p[df_p['Tipo'] == 'Abono']['Monto'].sum()
+        saldo_global = nuevo_saldo - tot_g + tot_a
 
-        fig = px.area(grafica_df, x='Fecha_DT', y='Saldo_Acumulado', line_shape="hv", title="Trayectoria del Dinero")
-        fig.update_traces(line_color='#FF5733')
-        st.plotly_chart(fig, width='stretch')
+        st.subheader("🍴 Estado de Nuestra Fortuna")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("💰 Fondo Inicial", f"${int(nuevo_saldo):,}")
+        m2.metric("🍗 Gastado Total", f"${int(tot_g):,}")
+        m3.metric("🥗 Disponible Real", f"${int(saldo_global):,}")
+
+        # Gráfica de Escalera corregida
+        diario = df_p.groupby('Fecha_Grafica').apply(lambda x: (x[x['Tipo']=='Abono']['Monto'].sum() - x[x['Tipo']=='Gasto']['Monto'].sum())).reset_index(name='Efecto')
+        diario = diario.sort_values('Fecha_Grafica')
+        diario['Saldo_Proyectado'] = nuevo_saldo + diario['Efecto'].cumsum()
+
+        fig_line = px.area(diario, x='Fecha_Grafica', y='Saldo_Proyectado', line_shape="hv", markers=True)
+        fig_line.update_traces(line_color='#FF5733', fillcolor='rgba(255, 87, 51, 0.2)')
+        fig_line.update_xaxes(tickformat="%d/%m/%Y", title="Día")
+        st.plotly_chart(fig_line, use_container_width=True)
     else:
-        st.info("Sin datos para graficar.")
+        st.info("No hay datos suficientes para las gráficas.")
