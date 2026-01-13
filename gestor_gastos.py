@@ -79,37 +79,40 @@ with tab_bitacora:
     )
     
     if st.button("💾 Guardar Cambios en la Nube"):
-        # 1. Crear una copia para no afectar lo que ves en pantalla inmediatamente
+        # 1. Copia de seguridad del editor
         df_save = df_editado.copy()
         
-        # 2. Limpieza crítica: Eliminar filas donde falte la Fecha o el Monto
+        # 2. Filtrar: Solo filas que tengan Fecha y Monto (evita basura)
         df_save = df_save.dropna(subset=['Fecha', 'Monto'], how='any')
         
         if not df_save.empty:
-            # --- CORRECCIÓN DE FECHA ---
-            # Nos aseguramos de que sea un objeto datetime y luego lo pasamos a texto ISO
+            # --- TRUCO DE FECHA PARA GOOGLE ---
+            # Convertimos a datetime y luego a string ISO (YYYY-MM-DD)
+            # Esto es lo que Google Sheets entiende como Fecha universal
             df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
             
-            # Aseguramos que el resto de datos sean strings o números limpios
-            df_save['Monto'] = df_save['Monto'].apply(float)
-            df_save['Concepto'] = df_save['Concepto'].astype(str)
+            # Aseguramos que el resto sean formatos simples
+            df_save['Monto'] = df_save['Monto'].astype(float)
+            df_save['Concepto'] = df_save['Concepto'].astype(str).fillna("")
             
             try:
-                # 3. EJECUTAR ACTUALIZACIÓN
-                # Usamos el nombre de la conexión definida arriba
+                # 3. ACTUALIZACIÓN REAL
                 conn.update(data=df_save)
                 
-                st.success(f"✅ ¡Se registraron {len(df_save)} movimientos correctamente!")
+                # 4. LIMPIEZA DE MEMORIA (CRUCIAL)
+                # Esto borra la copia vieja que Streamlit tiene guardada
+                st.cache_data.clear() 
+                
+                st.success(f"✅ ¡{len(df_save)} movimientos guardados!")
                 st.balloons()
                 
-                # 4. Forzar recarga para leer los nuevos datos de la nube
-                st.cache_data.clear() # Limpia cualquier caché de lectura
+                # 5. Reinicio para ver los cambios
                 st.rerun()
                 
-            except Exception as save_error:
-                st.error(f"Error al escribir en la hoja: {save_error}")
+            except Exception as e:
+                st.error(f"Error al enviar a Google Sheets: {e}")
         else:
-            st.warning("⚠️ No se puede guardar: Asegúrate de que las filas tengan Fecha y Monto.")
+            st.warning("No hay datos válidos (Fecha y Monto) para guardar.")
 
 with tab_analisis:
     # Mantenemos tu lógica de gráficas intacta aquí abajo...
