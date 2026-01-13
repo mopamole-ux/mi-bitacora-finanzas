@@ -14,7 +14,7 @@ if "connections" in st.secrets and "gsheets" in st.secrets.connections:
     if "private_key" in secret_dict:
         secret_dict["private_key"] = secret_dict["private_key"].replace("\\n", "\n")
 else:
-    st.error("¡Faltan las credenciales en Secrets!")
+    st.error("¡Faltan las credenciales!")
     st.stop()
 
 # --- 2. CONEXIÓN ---
@@ -48,57 +48,65 @@ except Exception as e:
     st.error(f"Error de conexión: {e}")
     st.stop()
 
-# --- SIDEBAR: CONFIGURACIÓN DIVERTIDA ---
+# --- SIDEBAR: CONFIGURACIÓN ---
 with st.sidebar:
-    st.header("👨‍🍳 El Chef del Dinero")
-    
-    # --- AJUSTE SOLICITADO: Salto de 100 en 100 y sin decimales (%d) ---
-    nuevo_saldo = st.number_input(
-        "💰 Saldo Inicial", 
-        value=int(saldo_base_valor), 
-        step=100, 
-        format="%d"
-    )
+    st.header("👨‍Chef del Dinero")
+    nuevo_saldo = st.number_input("💰 Saldo Inicial", value=int(saldo_base_valor), step=100, format="%d")
     
     if st.button("🍳 Guardar Saldo Base"):
-        df_conf_save = pd.DataFrame({"SaldoBase": [nuevo_saldo]})
         try:
+            df_conf_save = pd.DataFrame({"SaldoBase": [nuevo_saldo]})
             conn.update(worksheet="Config", data=df_conf_save)
             st.success("¡Caja Registradora actualizada!")
             st.cache_data.clear()
             st.rerun()
-        except:
-            st.error("¿Creaste la pestaña 'Config' en tu Google Sheets?")
+        except Exception as e:
+            st.error(f"Error: Asegúrate de que exista la pestaña 'Config'. Detalle: {e}")
 
 # --- TABS ---
 tab_registro, tab_analisis = st.tabs(["📝 Anotar Pedido", "📊 ¿Cuánto nos comimos?"])
 
 with tab_registro:
-    st.subheader("🛒 Registro de Atracos Culinarios")
+    st.subheader("🛒 Registro de Movimientos")
     
     df_editado = st.data_editor(
         df_man[COLUMNAS],
         num_rows="dynamic",
         width="stretch",
         column_config={
-            "Fecha": st.column_config.DateColumn("Fecha"),
+            "Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
             "Tipo": st.column_config.SelectboxColumn("Tipo", options=["Gasto", "Abono"]),
-            "Categoria": st.column_config.SelectboxColumn("Categoría", options=["Super", "Software/Suscripciones", "Alimentos/Restaurantes", "Servicios", "Viajes", "Salud", "Transporte", "Otros"]),
-            "Monto": st.column_config.NumberColumn("Monto", format="$%.2f")
+            "Monto": st.column_config.NumberColumn("Monto", format="$%d"),
+            "Categoria": st.column_config.SelectboxColumn("Categoría", options=["Supermercado/Despensa", "Software/Suscripciones", "Alimentos/Restaurantes", "Servicios", "Viajes", "Otros"])
         },
-        key="editor_comelones"
+        key="editor_comelones_v2"
     )
     
-    if st.button("💾 GUARDAR TODO"):
+    # --- REGRESAMOS LOS TOTALES AL INICIO (TABLA ACTUAL) ---
+    st.markdown("---")
+    col_g, col_a, col_n = st.columns(3)
+    
+    g_actual = df_editado[df_editado['Tipo'] == 'Gasto']['Monto'].sum()
+    a_actual = df_editado[df_editado['Tipo'] == 'Abono']['Monto'].sum()
+    
+    col_g.metric("🔴 Gastos en Tabla", f"${int(g_actual):,}")
+    col_a.metric("🟢 Abonos en Tabla", f"${int(a_actual):,}")
+    col_n.metric("⚖️ Neto (A-G)", f"${int(a_actual - g_actual):,}")
+    st.markdown("---")
+
+    if st.button("💾 GUARDAR TODO EN GOOGLE SHEETS"):
         df_save = df_editado.dropna(subset=['Fecha', 'Monto']).copy()
         if not df_save.empty:
             df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
             conn.update(data=df_save)
             st.cache_data.clear()
-            st.success("¡Sincronizado!")
+            st.success("¡Buen provecho! Datos sincronizados.")
+            st.balloons()
             st.rerun()
+        else:
+            st.warning("No hay datos para guardar.")
 
-with tab_atracos if 'tab_atracos' in locals() else tab_analisis:
+with tab_analisis:
     df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
     
     if not df_p.empty:
@@ -107,21 +115,19 @@ with tab_atracos if 'tab_atracos' in locals() else tab_analisis:
         tot_a = df_p[df_p['Tipo'] == 'Abono']['Monto'].sum()
         disponible_final = nuevo_saldo - tot_g + tot_a
 
-        # RESUMEN PARA LOS DOS COMELONES
-        st.subheader("🍴 Estado de la Panza (y la Cartera)")
+        st.subheader("🍴 Estado Global de la Cartera")
         m1, m2, m3 = st.columns(3)
-        m1.metric("Fondo de Comida", f"${nuevo_saldo:,.2f}")
-        m2.metric("🍗 Gastado", f"${tot_g:,.2f}", delta_color="inverse")
-        m3.metric("🥗 Nos queda", f"${disponible_final:,.2f}")
+        m1.metric("Fondo Inicial", f"${int(nuevo_saldo):,}")
+        m2.metric("🍗 Gastado Total", f"${int(tot_g):,}", delta_color="inverse")
+        m3.metric("🥗 Disponible Real", f"${int(disponible_final):,}")
 
-        # GRÁFICA DE ESCALERA
+        # Gráfica de Escalera
         diario = df_p.groupby('Fecha_DT').apply(lambda x: (x[x['Tipo']=='Abono']['Monto'].sum() - x[x['Tipo']=='Gasto']['Monto'].sum())).reset_index(name='Efecto')
         diario = diario.sort_values('Fecha_DT')
         diario['Saldo_Proyectado'] = nuevo_saldo + diario['Efecto'].cumsum()
 
-        fig = px.area(diario, x='Fecha_DT', y='Saldo_Proyectado', line_shape="hv", markers=True, 
-                      title="🎢 Montaña Rusa del Dinero")
+        fig = px.area(diario, x='Fecha_DT', y='Saldo_Proyectado', line_shape="hv", markers=True, title="🎢 Trayectoria del Dinero")
         fig.update_traces(line_color='#FF5733', fillcolor='rgba(255, 87, 51, 0.2)')
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("¡Anota algo arriba para que yo pueda trabajar! 👨‍🍳")
+        st.info("Anota algo para empezar el análisis.")
