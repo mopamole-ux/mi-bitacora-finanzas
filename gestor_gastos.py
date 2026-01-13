@@ -75,9 +75,9 @@ except Exception as e:
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.header("👨‍🍳 Menú del Chef")
+    st.header("Saldo inicial")
     nuevo_saldo = st.number_input("💰 Saldo Base", value=int(saldo_base_valor), step=100, format="%d")
-    if st.button("🍳 Guardar Saldo"):
+    if st.button("Guardar saldo"):
         conn.update(worksheet="Config", data=pd.DataFrame({"SaldoBase": [nuevo_saldo]}))
         st.cache_data.clear()
         st.rerun()
