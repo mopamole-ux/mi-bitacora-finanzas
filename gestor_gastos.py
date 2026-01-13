@@ -122,7 +122,6 @@ with tab_reg:
 with tab_ana:
     st.info("Revisa los totales en la pestaña de Registro.")
 
-with tab_analisis:
     df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
     if not df_p.empty:
         df_p['Fecha_DT'] = pd.to_datetime(df_p['Fecha']).dt.normalize()
