@@ -2,18 +2,17 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import plotly.express as px
-from datetime import datetime
 
 # 1. CONFIGURACIÓN ÚNICA
 st.set_page_config(page_title="Bitácora de Gorditos 🍔", layout="wide")
 
-# --- BANNER ---
+# --- BANNER (Actualizado a width='stretch') ---
 URL_BANNER = "https://lh3.googleusercontent.com/d/11Rdr2cVYIypLjmSp9jssuvoOxQ-kI1IZ"
-st.image(URL_BANNER, use_container_width=True)
+st.image(URL_BANNER, width='stretch')
 
 st.title("🍕 Bitácora de Gorditos 🍔")
 
-# --- 2. CONEXIÓN Y ESTRUCTURA ---
+# --- 2. CONEXIÓN ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 COLUMNAS_MAESTRAS = [
@@ -24,11 +23,11 @@ COLUMNAS_MAESTRAS = [
 # --- 3. LECTURA DE DATOS ---
 try:
     # Leer Configuración
-    try:
-        df_config = conn.read(worksheet="Config", ttl=0)
-        saldo_base_valor = float(df_config.iloc[0, 0]) if not df_config.empty else 20000.0
+    df_config = conn.read(worksheet="Config", ttl=0)
+    if not df_config.empty:
+        saldo_base_valor = float(df_config.iloc[0, 0])
         limite_atracón = float(df_config.iloc[0, 1]) if len(df_config.columns) > 1 else 15000.0
-    except:
+    else:
         saldo_base_valor, limite_atracón = 20000.0, 15000.0
 
     # Leer Movimientos
@@ -40,8 +39,7 @@ try:
             if c not in df_man.columns:
                 df_man[c] = ""
         
-        df_man = df_man[COLUMNAS_MAESTRAS]
-        # IMPORTANTE: Convertimos a datetime para el editor, pero quitamos las horas
+        df_man = df_man[COLUMNAS_MAESTRAS].copy()
         df_man['Fecha'] = pd.to_datetime(df_man['Fecha'], errors='coerce')
         df_man['Monto'] = pd.to_numeric(df_man['Monto'], errors='coerce').fillna(0.0)
     else:
@@ -51,7 +49,7 @@ except Exception as e:
     st.error(f"Error al leer datos: {e}")
     st.stop()
 
-# --- 4. SIDEBAR CON TERMÓMETRO ---
+# --- 4. SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Configuración")
     nuevo_saldo = st.number_input("💰 Saldo Inicial", value=int(saldo_base_valor), step=100, format="%d")
@@ -61,27 +59,19 @@ with st.sidebar:
         df_conf_save = pd.DataFrame({"SaldoBase": [nuevo_saldo], "Limite": [nuevo_limite]})
         conn.update(worksheet="Config", data=df_conf_save)
         st.cache_data.clear()
-        st.success("Configuración guardada")
         st.rerun()
 
     st.divider()
-    st.subheader("🌡️ Termómetro de Atracón")
-    gastos_totales_term = df_man[df_man['Tipo'] == 'Gasto']['Monto'].sum()
-    porcentaje = min(gastos_totales_term / nuevo_limite, 1.0) if nuevo_limite > 0 else 0
-    
-    if gastos_totales_term > nuevo_limite:
-        st.error(f"🚨 ¡LÍMITE SUPERADO! Llevan ${int(gastos_totales_term):,}")
-    else:
-        st.progress(porcentaje)
-        st.info(f"Llevan ${int(gastos_totales_term):,} de ${int(nuevo_limite):,}")
+    st.subheader("🌡️ Termómetro")
+    gastos_calc = df_man[df_man['Tipo'] == 'Gasto']['Monto'].sum()
+    progreso = min(gastos_calc / nuevo_limite, 1.0) if nuevo_limite > 0 else 0
+    st.progress(progreso)
+    st.write(f"Llevan ${int(gastos_calc):,} de ${int(nuevo_limite):,}")
 
 # --- 5. REGISTRO ---
-tab_reg, tab_analisis = st.tabs(["⌨️ Registro", "📊 Análisis"])
+tab_reg, tab_ana = st.tabs(["📝 Registro", "📊 Análisis"])
 
 with tab_reg:
-    st.subheader("🛒 Registro de Movimientos")
-    
-    # El editor usa el formato de fecha de Python
     df_editado = st.data_editor(
         df_man,
         num_rows="dynamic",
@@ -95,43 +85,32 @@ with tab_reg:
             "Metodo_Pago": st.column_config.SelectboxColumn("💳 Forma pago", options=["TDC", "Efectivo", "TDD"]),
             "Responsable": st.column_config.SelectboxColumn("👤 Responsable", options=["Gordify", "Mon"])
         },
-        key="editor_final_v10" # Cambiamos la key para resetear el estado
+        key="editor_2026_v1"
     )
 
-    g_actual = df_editado[df_editado['Tipo'] == 'Gasto']['Monto'].sum()
-    a_actual = df_editado[df_editado['Tipo'] == 'Abono']['Monto'].sum()
-    neto_proyectado = nuevo_saldo + a_actual - g_actual
+    # Totales
+    g_act = df_editado[df_editado['Tipo'] == 'Gasto']['Monto'].sum()
+    a_act = df_editado[df_editado['Tipo'] == 'Abono']['Monto'].sum()
+    st.metric("💰 NETO PROYECTADO", f"${int(nuevo_saldo + a_act - g_act):,}")
 
-    st.markdown("---")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("🔴 Gastos", f"${int(g_actual):,}")
-    c2.metric("🟢 Abonos", f"${int(a_actual):,}")
-    c3.metric("💰 NETO PROYECTADO", f"${int(neto_proyectado):,}")
-    st.markdown("---")
-
-    if st.button("💾 GUARDAR TODO EN GOOGLE SHEETS"):
-        # PASO 1: Filtrar solo lo que tiene Fecha y Concepto
-        df_save = df_editado.dropna(subset=['Fecha', 'Concepto']).copy()
+    if st.button("💾 GUARDAR TODO"):
+        # Limpieza estricta: Solo filas con Fecha y Monto
+        df_save = df_editado.dropna(subset=['Fecha', 'Monto']).copy()
         
         if not df_save.empty:
-            # PASO 2: Forzar la Fecha a STRING (YYYY-MM-DD) para que Google Sheets no se bloquee
+            # Convertir Fecha a Texto ISO para Google
             df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
-            
-            # PASO 3: Asegurar las 8 columnas
             df_final = df_save[COLUMNAS_MAESTRAS]
             
             try:
                 conn.update(data=df_final)
                 st.cache_data.clear()
-                st.success("✅ ¡Guardado con éxito!")
-                st.balloons()
+                st.success("✅ Guardado correctamente")
                 st.rerun()
             except Exception as e:
                 st.error(f"Error al guardar: {e}")
-        else:
-            st.warning("Asegúrate de poner Fecha y Concepto en los nuevos registros.")
 
-with tab_analisis:
+with tab_ana:
     # Usamos df_man que ya tiene las fechas limpias de la lectura
     df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
     if not df_p.empty:
