@@ -4,7 +4,28 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 
-st.set_page_config(page_title="Bitácora Comelones 🍔", layout="wide")
+# --- BANNER Y TÍTULOS ---
+# Puedes cambiar la URL de abajo por cualquier imagen de comida que les guste
+URL_BANNER = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80"
+
+st.image(URL_BANNER, use_container_width=True)
+
+st.title("🍕 Bitácora de Gorditos 🍔")
+st.markdown("""
+    <style>
+    .main {
+        background-color: #fffaf0; /* Un color crema muy sutil de fondo */
+    }
+    .stMetric {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.markdown("### *Porque comer es un placer, pero pagarlo es un deber...* 🍔🍟")
 
 # --- 1. CONFIGURACIÓN DE SEGURIDAD ---
 if "connections" in st.secrets and "gsheets" in st.secrets.connections:
