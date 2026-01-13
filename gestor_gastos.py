@@ -39,24 +39,13 @@ else:
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
     
-    # Leer Config (Saldo y Límite)
-    try:
-        df_config = conn.read(worksheet="Config", ttl=0)
-        saldo_base_valor = float(df_config.iloc[0, 0]) if not df_config.empty else 20000.0
-        limite_atracón = float(df_config.iloc[0, 1]) if len(df_config.columns) > 1 else 15000.0
-    except:
-        saldo_base_valor, limite_atracón = 20000.0, 15000.0
-
-    # Leer Movimientos
-    df_man = conn.read(ttl=0)
-    # Lista maestra de columnas (asegúrate que coincidan con el Excel)
-    COLUMNAS_MAESTRAS = [
+# 1. Definición Maestra de Columnas (El orden importa)
+COLUMNAS_MAESTRAS = [
     "Fecha", "Concepto", "Monto", "Tipo", 
-    "Categoria", "Tipo_Pago", "Metodo_Pago", "Responsable"]
-    
-    if df_man is not None and not df_man.empty:
-        
-        df# 2. Lectura con Limpieza Inmediata
+    "Categoria", "Tipo_Pago", "Metodo_Pago", "Responsable"
+]
+
+# 2. Lectura con Limpieza Inmediata
 df_man = conn.read(ttl=0)
 
 if df_man is not None and not df_man.empty:
