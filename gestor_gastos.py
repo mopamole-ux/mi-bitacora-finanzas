@@ -138,15 +138,31 @@ with tab_fijos:
                         "Ambito": row['Ambito']
                     }])
                     # Concatenar con los datos actuales
-                    # Importante: Convertir df_man['Fecha'] a string para que coincida con el nuevo registro
+                    # Importante: Convertir df_man['Fecha'] a string para que coincida con el nuevo registro                 
+                    # 2. Preparar el DataFrame actual (asegurando formato de fecha string)
                     df_temp = df_man.copy()
-                    df_temp['Fecha'] = df_temp['Fecha'].dt.strftime('%Y-%m-%d')
-                    df_final_upd = pd.concat([df_temp, nuevo_pago], ignore_index=True)
+                    if not df_temp.empty:
+                        df_temp['Fecha'] = pd.to_datetime(df_temp['Fecha']).dt.strftime('%Y-%m-%d')
                     
-                    conn.update(data=df_final_to_send := df_final_upd[COLUMNAS_MAESTRAS])
-                    st.cache_data.clear()
-                    st.toast(f"Registrado: {row['Concepto']}")
-                    st.rerun()
+                    # 3. Añadir la nueva fila
+                    nuevo_pago_df = pd.DataFrame([nuevo_pago_dict])
+                    df_final_upd = pd.concat([df_temp, nuevo_pago_df], ignore_index=True)
+                    
+                    # 4. Limpiar y enviar a Google Sheets
+                    df_final_to_send = df_final_upd[COLUMNAS_MAESTRAS]
+                    
+                    try:
+                        conn.update(data=df_final_to_send)
+                        st.cache_data.clear()
+                        st.toast(f"✅ Registrado: {row['Concepto']}")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al registrar fijo: {e}")
+
+
+
+
 
 # --- TAB: ANÁLISIS ---
 with tab_ana:
