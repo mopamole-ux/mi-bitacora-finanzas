@@ -100,32 +100,36 @@ with tab_bitacora:
             st.balloons()
             st.rerun()
 
-with tab_analisis:
-    if not df_man.dropna(subset=['Monto', 'Fecha']).empty:
-        df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
-        df_p['Fecha_DT'] = df_p['Fecha'].dt.normalize()
-        
-        total_g = df_p[df_p['Tipo'] == 'Gasto']['Monto'].sum()
-        total_a = df_p[df_p['Tipo'] == 'Abono']['Monto'].sum()
-        saldo_final = disponible_banco - total_g + total_a
+with tab_atracos:
+    df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
+    
+    if not df_p.empty:
+        df_p['Fecha_DT'] = pd.to_datetime(df_p['Fecha']).dt.normalize()
+        tot_g = df_p[df_p['Tipo'] == 'Gasto']['Monto'].sum()
+        tot_a = df_p[df_p['Tipo'] == 'Abono']['Monto'].sum()
+        disponible_final = nuevo_saldo - tot_g + tot_a
 
-        # Resumen visual
-        st.subheader("📉 Estado de Cuenta Real")
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Saldo Inicial", f"${disponible_banco:,.2f}")
-        m2.metric("Total Gastos", f"${total_g:,.2f}", delta_color="inverse")
-        m3.metric("Disponible Hoy", f"${saldo_final:,.2f}")
+        # Métricas gigantes
+        c1, c2, c3 = st.columns(3)
+        c1.metric("💰 Saldo Inicial", f"${nuevo_saldo:,.2f}")
+        c2.metric("🍗 Gastos", f"${tot_g:,.2f}", delta_color="inverse")
+        c3.metric("🥗 Disponible", f"${disponible_final:,.2f}")
 
-        # Gráfica de Escalera
+        # Gráfica de trayectoria con colores de comida
         st.divider()
         diario = df_p.groupby('Fecha_DT').apply(lambda x: (x[x['Tipo']=='Abono']['Monto'].sum() - x[x['Tipo']=='Gasto']['Monto'].sum())).reset_index(name='Efecto')
         diario = diario.sort_values('Fecha_DT')
-        diario['Saldo_Proyectado'] = disponible_banco + diario['Efecto'].cumsum()
+        diario['Saldo_Proyectado'] = nuevo_saldo + diario['Efecto'].cumsum()
 
         fig_line = px.area(diario, x='Fecha_DT', y='Saldo_Proyectado', 
-                          line_shape="hv", markers=True, title="Evolución del Dinero")
-        fig_line.update_xaxes(nticks=10, tickformat="%d %b")
-        fig_line.update_traces(line_color='#28A745', fillcolor='rgba(40, 167, 69, 0.2)')
+                          line_shape="hv", markers=True, title="🍔 Nuestra Curva de Felicidad (Saldo)")
+        fig_line.update_traces(line_color='#FF5733', fillcolor='rgba(255, 87, 51, 0.2)')
         st.plotly_chart(fig_line, use_container_width=True)
+
+        # Categorías más pedidas
+        st.subheader("🏆 Lo que más nos gusta")
+        df_cat = df_p[df_p['Tipo'] == 'Gasto'].groupby('Categoria')['Monto'].sum().reset_index()
+        fig_cat = px.bar(df_cat.sort_values('Monto'), x='Monto', y='Categoria', orientation='h', color='Monto', color_continuous_scale='OrRd')
+        st.plotly_chart(fig_cat, use_container_width=True)
     else:
-        st.info("No hay datos en la nube para analizar.")
+        st.warning("¡La nevera está vacía! (No hay datos)")
