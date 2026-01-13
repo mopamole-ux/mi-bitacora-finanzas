@@ -67,7 +67,7 @@ with tab_bitacora:
             "Fecha": st.column_config.DateColumn("Fecha", format="DD-MM-YYYY", required=True),
             "Tipo": st.column_config.SelectboxColumn("Tipo", options=["Gasto", "Abono"], required=True),
             "Metodo_Pago": st.column_config.SelectboxColumn("Método", options=["Manual", "Automático"], required=True),
-            "Categoria": st.column_config.SelectboxColumn("Categoría", options=["Servicios", "Super", "Alimentos", "Restaurantes", "Software", "Suscripciones", "Viajes, "Salud", "Préstamos", "Pago TDC", "Pagos Sardina", "Otros"], required=True),
+            "Categoria": st.column_config.SelectboxColumn("Categoría", options=["Servicios", "Super", "Alimentos", "Restaurantes", "Software", "Suscripciones", "Viajes", "Salud", "Préstamos", "Pago TDC", "Pagos Sardina", "Otros"], required=True),
             "Monto": st.column_config.NumberColumn("Monto", format="$%.2f", min_value=0.0)
         },
         key="editor_nube_v_final"
