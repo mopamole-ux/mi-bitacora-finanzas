@@ -15,6 +15,7 @@ st.markdown("""
     <style>
     .main {
         background-color: #fffaf0; /* Un color crema muy sutil de fondo */
+        width: 100%;
     }
     .stMetric {
         background-color: #ffffff;
