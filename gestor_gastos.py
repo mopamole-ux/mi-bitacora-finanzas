@@ -23,6 +23,10 @@ st.markdown("""
         border-radius: 10px;
         box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
     }
+    .st-emotion-cache-1w723zb {
+        max-width: 1200px;
+    }
+
     </style>
     """, unsafe_allow_html=True)
 
