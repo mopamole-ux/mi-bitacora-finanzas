@@ -3,21 +3,16 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import os
 
 st.set_page_config(page_title="Mi Bitácora Pro", layout="wide")
 
-# --- CONFIGURACIÓN ---
-CATEGORIAS = ["Supermercado/Despensa", "Software/Suscripciones", "Alimentos/Restaurantes", "Servicios", "Préstamos", "Viajes", "Salud", "Transporte", "Seguros", "Compras/Otros", "Pagos Realizados"]
-METODOS = ["Manual/Físico", "Automático"]
-TIPOS = ["Gasto", "Abono"]
-COLUMNAS = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
-
-# --- CONEXIÓN AUTOMÁTICA ---
+# --- CONEXIÓN ---
 try:
-    # No pasamos parámetros aquí; Streamlit leerá automáticamente [connections.gsheets]
+    # Dejamos que Streamlit maneje la conexión automáticamente desde los secrets
     conn = st.connection("gsheets", type=GSheetsConnection)
     df_raw = conn.read(ttl=0)
+    
+    COLUMNAS = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
     
     if df_raw is not None and not df_raw.empty:
         df_raw.columns = [str(c).strip() for c in df_raw.columns]
@@ -25,7 +20,7 @@ try:
             if c not in df_raw.columns: df_raw[c] = ""
         df_man = df_raw[COLUMNAS].copy()
         
-        # Limpieza de datos
+        # Limpiar datos para que coincidan con selectores
         for col in ["Tipo", "Categoria", "Metodo_Pago"]:
             df_man[col] = df_man[col].astype(str).str.strip().replace("nan", "")
         
@@ -37,8 +32,8 @@ try:
     disponible_banco = 20000.0 
 
 except Exception as e:
-    st.error("Error de conexión. Revisa los Secrets.")
-    st.exception(e)
+    st.error("🚨 Error de conexión. Revisa que hayas compartido la hoja con el correo del bot.")
+    st.exception(e) # Esto mostrará el error real si persiste
     st.stop()
 
 # --- INTERFAZ ---
@@ -51,12 +46,12 @@ with tab1:
         df_man, num_rows="dynamic", width="stretch",
         column_config={
             "Fecha": st.column_config.DateColumn("Fecha", format="DD-MM-YYYY"),
-            "Tipo": st.column_config.SelectboxColumn("Tipo", options=TIPOS),
-            "Metodo_Pago": st.column_config.SelectboxColumn("Método", options=METODOS),
-            "Categoria": st.column_config.SelectboxColumn("Categoría", options=CATEGORIAS),
+            "Tipo": st.column_config.SelectboxColumn("Tipo", options=["Gasto", "Abono"]),
+            "Metodo_Pago": st.column_config.SelectboxColumn("Método", options=["Manual/Físico", "Automático"]),
+            "Categoria": st.column_config.SelectboxColumn("Categoría", options=["Servicios", "Supermercado/Despensa", "Alimentos/Restaurantes", "Software/Suscripciones", "Otros"]),
             "Monto": st.column_config.NumberColumn("Monto", format="$%.2f")
         },
-        key="editor_final_v10"
+        key="editor_vFinal_OK"
     )
     
     if st.button("💾 GUARDAR CAMBIOS"):
@@ -68,31 +63,18 @@ with tab1:
             st.rerun()
 
 with tab2:
-    if not df_man.dropna(subset=['Monto', 'Fecha']).empty:
+    if not df_man.dropna(subset=['Monto']).empty:
         df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
         df_p['Fecha_DT'] = df_p['Fecha'].dt.normalize()
         
         total_g = df_p[df_p['Tipo'] == 'Gasto']['Monto'].sum()
         total_a = df_p[df_p['Tipo'] == 'Abono']['Monto'].sum()
         saldo_final = disponible_banco - total_g + total_a
-        uso_manual = (total_g / disponible_banco * 100) if disponible_banco > 0 else 0
 
-        # Métricas
-        c1, c2 = st.columns([2, 1])
-        with c1:
-            st.subheader("📉 Resumen")
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Límite Base", f"${disponible_banco:,.2f}")
-            m2.metric("Gastos", f"${total_g:,.2f}", delta_color="inverse")
-            m3.metric("Disponible", f"${saldo_final:,.2f}")
-        
-        with c2:
-            fig_gauge = go.Figure(go.Indicator(
-                mode = "gauge+number", value = min(uso_manual, 100),
-                title = {'text': "% Uso Crédito"},
-                gauge = {'bar': {'color': "#1f77b4"}}))
-            fig_gauge.update_layout(height=250, margin=dict(t=50, b=0))
-            st.plotly_chart(fig_gauge, use_container_width=True)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Límite", f"${disponible_banco:,.2f}")
+        c2.metric("Gastos", f"${total_g:,.2f}", delta_color="inverse")
+        c3.metric("Disponible", f"${saldo_final:,.2f}")
 
         # Gráfica de Escalera
         st.divider()
