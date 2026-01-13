@@ -16,23 +16,23 @@ if "connections" in st.secrets and "gsheets" in st.secrets.connections:
     if "private_key" in secret_dict:
         secret_dict["private_key"] = secret_dict["private_key"].replace("\\n", "\n")
 else:
-    st.error("No se encontraron los Secrets configurados.")
+    st.error("¡Faltan los ingredientes (Secrets)!")
     st.stop()
-
-# --- FUNCIONES DE SOPORTE ---
-def a_float(v):
-    try:
-        if pd.isna(v) or str(v).strip() == "": return 0.0
-        clean_v = str(v).replace(',', '').replace('$', '').replace(' ', '').strip()
-        return float(clean_v)
-    except: return 0.0
 
 # --- 2. CONEXIÓN Y LECTURA ---
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # ttl=0 es vital para que al guardar y recargar lea los datos NUEVOS
-    df_man = conn.read(ttl=0)
     
+    # Leer Movimientos (Hoja 1)
+    df_man = conn.read(ttl=0) 
+    
+    # Leer Saldo Base (Pestaña 'Config')
+    try:
+        df_config = conn.read(worksheet="Config", ttl=0)
+        saldo_base_valor = float(df_config.iloc[0, 0])
+    except:
+        saldo_base_valor = 20000.0 # Respaldo por si no existe la pestaña
+
     COLUMNAS = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
     
     if df_man is not None and not df_man.empty:
@@ -42,39 +42,58 @@ try:
         for col in ["Tipo", "Categoria", "Metodo_Pago"]:
             df_man[col] = df_man[col].astype(str).str.strip().replace("nan", "")
         df_man['Fecha'] = pd.to_datetime(df_man['Fecha'], errors='coerce')
-        df_man['Monto'] = df_man['Monto'].apply(a_float)
+        df_man['Monto'] = pd.to_numeric(df_man['Monto'], errors='coerce').fillna(0.0)
     else:
         df_man = pd.DataFrame(columns=COLUMNAS)
 
 except Exception as e:
-    st.error(f"Error de conexión: {e}")
+    st.error(f"Se quemó el arroz (Error de conexión): {e}")
     st.stop()
 
-# --- SIDEBAR: SALDO BASE ---
+# --- SIDEBAR: EL CHEF CONFIGURADOR ---
 with st.sidebar:
-    st.header("⚙️ Configuración")
-    disponible_banco = st.number_input("💰 Saldo Base Inicial", value=20000.0, step=100.0)
-    st.caption("Este valor es el punto de partida de tu dinero.")
-
-# --- TABS ---
-tab_bitacora, tab_analisis = st.tabs(["⌨️ Registro Manual", "📊 Análisis de Gastos"])
-
-with tab_bitacora:
-    st.subheader("Entrada de Movimientos")
+    st.header("👨‍🍳 Menú de Control")
+    nuevo_saldo = st.number_input("💰 Fondos Totales ($)", value=saldo_base_valor, step=500.0)
     
+    if st.button("🍳 Actualizar Caja Registradora"):
+        df_conf_save = pd.DataFrame({"SaldoBase": [nuevo_saldo]})
+        conn.update(worksheet="Config", data=df_conf_save)
+        st.success("¡Saldo base guardado!")
+        st.cache_data.clear()
+        st.rerun()
+    
+    st.divider()
+    st.markdown("❤️ **Comelón 1 & Comelón 2**")
+    st.image("https://cdn-icons-png.flaticon.com/512/857/857681.png", width=100)
+
+# --- TABS CON ONDA ---
+tab_registro, tab_atracos = st.tabs(["📝 Anotar el Pedido", "📊 ¿Cuánto nos comimos?"])
+
+with tab_registro:
+    st.subheader("🛒 Lista de Compras y Antojos")
+    
+    # Categorías con emojis
+    OPCIONES_CAT = [
+        "🍱 Super", "💻 Software/Suscripciones", 
+        "🍕 Alimentos/Restaurantes", "💡 Servicios", 
+        "💸 Préstamos", "✈️ Viajes", "💊 Salud", 
+        "🚌 Transporte", "🛡️ Seguros", "🎁 Compras/Otros", "💳 Pagos Realizados"
+    ]
+
     df_editado = st.data_editor(
         df_man[COLUMNAS],
         num_rows="dynamic",
         width="stretch",
         column_config={
-            "Fecha": st.column_config.DateColumn("Fecha", format="DD-MM-YYYY", required=True),
-            "Tipo": st.column_config.SelectboxColumn("Tipo", options=["Gasto", "Abono"], required=True),
-            "Metodo_Pago": st.column_config.SelectboxColumn("Método", options=["Manual", "Automático"], required=True),
-            "Categoria": st.column_config.SelectboxColumn("Categoría", options=["Servicios", "Super", "Alimentos", "Restaurantes", "Software", "Suscripciones", "Viajes", "Salud", "Préstamos", "Pago TDC", "Pagos Sardina", "Otros"], required=True),
-            "Monto": st.column_config.NumberColumn("Monto", format="$%.2f", min_value=0.0)
+            "Fecha": st.column_config.DateColumn("📅 Fecha"),
+            "Tipo": st.column_config.SelectboxColumn("✨ Tipo", options=["Gasto", "Abono"]),
+            "Metodo_Pago": st.column_config.SelectboxColumn("💳 Pago", options=["Manual", "Automático"]),
+            "Categoria": st.column_config.SelectboxColumn("📂 Categoría", options=OPCIONES_CAT),
+            "Monto": st.column_config.NumberColumn("💵 Monto", format="$%.2f")
         },
-        key="editor_nube_v_final"
+        key="editor_comelones_v1"
     )
+    
     # Totales rápidos estilo "Ticket de restaurante"
     g_total = df_editado[df_editado['Tipo'] == 'Gasto']['Monto'].sum()
     a_total = df_editado[df_editado['Tipo'] == 'Abono']['Monto'].sum()
