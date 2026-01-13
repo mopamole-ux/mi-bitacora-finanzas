@@ -51,7 +51,6 @@ except Exception as e:
     st.error(f"Error al leer datos: {e}")
     st.stop()
 
-
 # --- 4. SIDEBAR CON TERMÓMETRO ---
 with st.sidebar:
     st.header("⚙️ Configuración")
@@ -164,5 +163,4 @@ with tab_analisis:
         fig_cat = px.bar(df_cat.sort_values('Monto'), x='Monto', y='Categoria', orientation='h', color='Monto', color_continuous_scale='OrRd')
         st.plotly_chart(fig_cat, use_container_width=True)
     else:
-        st.info("No hay datos para analizar.")
         st.info("No hay datos para analizar.")
