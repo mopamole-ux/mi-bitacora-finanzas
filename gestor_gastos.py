@@ -80,7 +80,6 @@ with st.sidebar:
         st.rerun()
 
 # --- INTERFAZ ---
-st.title("🍕 El Festín de los Comelones 🌮")
 tab_registro, tab_analisis = st.tabs(["⌨️ Registro", "📊 Análisis"])
 
 with tab_registro:
