@@ -50,7 +50,7 @@ except Exception as e:
 # --- 4. SIDEBAR CON TERMÓMETRO ---
 with st.sidebar:
     st.header("⚙️ Configuración")
-    n_saldo = st.number_input("💰 Saldo Base", value=int(saldo_base_valor), step=100)
+    n_saldo = st.number_input("💰 Saldo al corte (11 de cada mes)", value=int(saldo_base_valor), step=100)
     n_limite = st.number_input("⚠️ Límite Gasto", value=int(limite_atracon), step=500)
     
     if st.button("Guardar"):
