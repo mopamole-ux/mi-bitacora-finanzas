@@ -123,11 +123,11 @@ with tab_registro:
 
 
 
-   if st.button("💾 GUARDAR TODO EN GOOGLE SHEETS"):
+if st.button("💾 GUARDAR TODO EN GOOGLE SHEETS"):
     # 1. Filtramos solo las filas que tienen datos esenciales
     df_save = df_editado.dropna(subset=['Fecha', 'Concepto']).copy()
     
-    if not df_save.empty:
+if not df_save.empty:
         # 2. Formateo de fecha estricto para Sheets
         df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
         
