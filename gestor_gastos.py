@@ -2,46 +2,28 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import plotly.express as px
-from datetime import datetime
 
-# 1. CONFIGURACIÓN DE PÁGINA (Solo una vez al principio)
+# 1. CONFIGURACIÓN ÚNICA
 st.set_page_config(page_title="Bitácora de Gorditos 🍔", layout="wide")
 
-# --- BANNER Y ESTILOS ---
+# --- BANNER ---
 URL_BANNER = "https://lh3.googleusercontent.com/d/11Rdr2cVYIypLjmSp9jssuvoOxQ-kI1IZ"
 st.image(URL_BANNER, use_container_width=True)
 
 st.title("🍕 Bitácora de Gorditos 🍔")
-st.markdown("""
-    <style>
-    .main { background-color: #fffaf0; }
-    
-    img {
-        max-height: 300px;
-        width: 100%;
-    }
-    .stMetric {
-        background-color: #ffffff;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
-    }
-    </style>
-    """, unsafe_allow_html=True)
 
-# --- 2. SEGURIDAD Y CONEXIÓN ---
-if "connections" in st.secrets and "gsheets" in st.secrets.connections:
-    secret_dict = dict(st.secrets.connections.gsheets)
-    if "private_key" in secret_dict:
-        secret_dict["private_key"] = secret_dict["private_key"].replace("\\n", "\n")
-    conn = st.connection("gsheets", type=GSheetsConnection)
-else:
-    st.error("¡Faltan las credenciales!")
-    st.stop()
+# --- 2. CONEXIÓN Y ESTRUCTURA ---
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+# Definimos el orden exacto que queremos en el Excel
+COLUMNAS_MAESTRAS = [
+    "Fecha", "Concepto", "Monto", "Tipo", 
+    "Categoria", "Tipo_Pago", "Metodo_Pago", "Responsable"
+]
 
 # --- 3. LECTURA DE DATOS ---
 try:
-    # Leer Config (Saldo y Límite)
+    # Leer Configuración (Pestaña Config)
     try:
         df_config = conn.read(worksheet="Config", ttl=0)
         saldo_base_valor = float(df_config.iloc[0, 0]) if not df_config.empty else 20000.0
@@ -51,12 +33,14 @@ try:
 
     # Leer Movimientos
     df_man = conn.read(ttl=0)
-    COLUMNAS_MAESTRAS = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Tipo_Pago", "Metodo_Pago", "Responsable"]
     
     if df_man is not None and not df_man.empty:
         df_man.columns = [str(c).strip() for c in df_man.columns]
+        # Si faltan columnas nuevas, las creamos con valores vacíos
         for c in COLUMNAS_MAESTRAS:
-            if c not in df_man.columns: df_man[c] = ""
+            if c not in df_man.columns:
+                df_man[c] = ""
+        # Reordenamos para que el Dashboard siempre vea lo mismo
         df_man = df_man[COLUMNAS_MAESTRAS]
         df_man['Fecha'] = pd.to_datetime(df_man['Fecha'], errors='coerce')
         df_man['Monto'] = pd.to_numeric(df_man['Monto'], errors='coerce').fillna(0.0)
@@ -64,34 +48,28 @@ try:
         df_man = pd.DataFrame(columns=COLUMNAS_MAESTRAS)
 
 except Exception as e:
-    st.error(f"Error de conexión: {e}")
+    st.error(f"Error al leer datos: {e}")
     st.stop()
 
 # --- 4. SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Configuración")
-    nuevo_saldo = st.number_input("💰 Saldo Base", value=int(saldo_base_valor), step=100, format="%d")
-    nuevo_limite = st.number_input("⚠️ Límite de Atracón", value=int(limite_atracón), step=500, format="%d")
+    nuevo_saldo = st.number_input("💰 Saldo Inicial", value=int(saldo_base_valor), step=100, format="%d")
+    nuevo_limite = st.number_input("⚠️ Límite de Gasto", value=int(limite_atracón), step=500, format="%d")
     
-    if st.button("Guardar Configuración"):
+    if st.button("🍳 Guardar Config"):
         df_conf_save = pd.DataFrame({"SaldoBase": [nuevo_saldo], "Limite": [nuevo_limite]})
         conn.update(worksheet="Config", data=df_conf_save)
         st.cache_data.clear()
-        st.success("¡Configuración guardada!")
+        st.success("Configuración guardada")
         st.rerun()
 
-    st.divider()
-    st.subheader("🌡️ Termómetro")
-    gastos_totales_db = df_man[df_man['Tipo'] == 'Gasto']['Monto'].sum()
-    progreso = min(gastos_totales_db / nuevo_limite, 1.0) if nuevo_limite > 0 else 0
-    st.progress(progreso)
-    st.write(f"Llevan ${int(gastos_totales_db):,} de ${int(nuevo_limite):,}")
+# --- 5. REGISTRO ---
+tab_reg, tab_ana = st.tabs(["⌨️ Registro", "📊 Análisis"])
 
-# --- 5. INTERFAZ DE TABS ---
-tab_registro, tab_analisis = st.tabs(["⌨️ Registro", "📊 Análisis"])
-
-with tab_registro:
+with tab_reg:
     st.subheader("🛒 Registro de Movimientos")
+    
     df_editado = st.data_editor(
         df_man,
         num_rows="dynamic",
@@ -105,32 +83,44 @@ with tab_registro:
             "Metodo_Pago": st.column_config.SelectboxColumn("💳 Forma pago", options=["TDC", "Efectivo", "TDD"]),
             "Responsable": st.column_config.SelectboxColumn("👤 Responsable", options=["Gordify", "Mon"])
         },
-        key="editor_final_v1"
+        key="editor_vFinal_8col"
     )
-    
-    # Totales en tiempo real sobre lo que está en el editor
+
+    # Totales proyectados
     g_actual = df_editado[df_editado['Tipo'] == 'Gasto']['Monto'].sum()
     a_actual = df_editado[df_editado['Tipo'] == 'Abono']['Monto'].sum()
-    disponible_final = nuevo_saldo + a_actual - g_actual
-    
+    neto_proyectado = nuevo_saldo + a_actual - g_actual
+
     st.markdown("---")
     c1, c2, c3 = st.columns(3)
     c1.metric("🔴 Gastos", f"${int(g_actual):,}")
     c2.metric("🟢 Abonos", f"${int(a_actual):,}")
-    c3.metric("💰 NETO PROYECTADO", f"${int(disponible_final):,}", delta=f"{int(a_actual - g_actual):,}")
+    c3.metric("💰 NETO PROYECTADO", f"${int(neto_proyectado):,}")
     st.markdown("---")
 
-    if st.button("💾 GUARDAR TODO"):
+    if st.button("💾 GUARDAR TODO EN GOOGLE SHEETS"):
+        # PASO CLAVE: Solo guardamos si hay datos, y forzamos la estructura
         df_save = df_editado.dropna(subset=['Fecha', 'Concepto']).copy()
+        
         if not df_save.empty:
+            # Convertimos fecha a texto para que Google no se confunda
             df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
+            
+            # Forzamos que el DataFrame tenga las 8 columnas antes de enviarlo
+            df_final = df_save[COLUMNAS_MAESTRAS]
+            
             try:
-                conn.update(data=df_save[COLUMNAS_MAESTRAS])
+                # Usamos la conexión para sobreescribir la tabla
+                conn.update(data=df_final)
                 st.cache_data.clear()
-                st.success("✅ ¡Guardado en la nube!")
+                st.success("✅ ¡Sincronizado correctamente!")
+                st.balloons()
                 st.rerun()
             except Exception as e:
-                st.error(f"Error al guardar: {e}")
+                st.error(f"Error al sincronizar: {e}")
+
+with tab_ana:
+    st.info("Revisa los totales en la pestaña de Registro.")
 
 with tab_analisis:
     df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
