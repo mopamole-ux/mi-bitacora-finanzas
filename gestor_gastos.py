@@ -121,8 +121,7 @@ with tab_reg:
 
 with tab_analisis:
     df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
-
-if not df_p.empty:
+    if not df_p.empty:
         df_p['Fecha_DT'] = pd.to_datetime(df_p['Fecha']).dt.normalize()
         tot_g = df_p[df_p['Tipo'] == 'Gasto']['Monto'].sum()
         tot_a = df_p[df_p['Tipo'] == 'Abono']['Monto'].sum()
