@@ -6,7 +6,7 @@ from datetime import datetime
 
 # --- BANNER Y TÍTULOS ---
 # Puedes cambiar la URL de abajo por cualquier imagen de comida que les guste
-URL_BANNER = "https://doc.google.com/uc?id=11Rdr2cVYIypLjmSp9jssuvoOxQ-kI1IZ"
+URL_BANNER = "https://drive.usercontent.google.com/download?id=11Rdr2cVYIypLjmSp9jssuvoOxQ-kI1IZ&authuser=1"
 
 st.image(URL_BANNER, use_container_width=True)
 
