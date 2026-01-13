@@ -96,7 +96,11 @@ with tab_registro:
             "Fecha": st.column_config.DateColumn("📅 Fecha", format="DD/MM/YYYY", required=True),
             "Tipo": st.column_config.SelectboxColumn("✨ Tipo", options=["Gasto", "Abono"]),
             "Monto": st.column_config.NumberColumn("💵 Monto", format="$%d"),
-            "Categoria": st.column_config.SelectboxColumn("📂 Categoría", options=["Super", "Software", "Suscripciones", "Restaurantes", "Servicios", "Salud", "Préstamos", "Pago TDC", "Salarios", "Viajes", "Otros"])
+            "Categoria": st.column_config.SelectboxColumn("📂 Categoría", options=["Super", "Software", "Suscripciones", "Restaurantes", "Servicios", "Salud", "Préstamos", "Pago TDC", "Salarios", "Viajes", "Otros"]),
+            "Tipo_Pago": st.column_config.SelectboxColumn("👤 Tipo de pago", options=["Manual", "Automático"]),
+            "Metodo_Pago": st.column_config.SelectboxColumn("👤 Forma de pago", options=["TDC", "Efectivo", "TDD"]),
+            "Responsable": st.column_config.SelectboxColumn("👤 Responsable", options=["Gordify", "Mon"])
+            
         },
         key="editor_fechas_fix"
     )
