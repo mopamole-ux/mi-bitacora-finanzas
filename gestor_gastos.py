@@ -5,8 +5,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 
-st.set_page_config(page_title="Bitácora Comelones 🍔", layout="wide")
-st.title("🍕 El Festín de los Comelones 🌮")
+st.set_page_config(page_title="Bitácora de Gorditos 🍕", layout="wide")
+st.title("🍕 Bitácora de Gorditos 🌮")
 
 # --- 1. CONFIGURACIÓN DE SEGURIDAD ---
 if "connections" in st.secrets and "gsheets" in st.secrets.connections:
@@ -64,10 +64,10 @@ with st.sidebar:
             st.error(f"Error: Asegúrate de que exista la pestaña 'Config'. Detalle: {e}")
 
 # --- TABS ---
-tab_registro, tab_analisis = st.tabs(["📝 Anotar Pedido", "📊 ¿Cuánto nos comimos?"])
+tab_registro, tab_analisis = st.tabs(["📝 Anotar Movimientos", "📊 Checar Estadísticas"])
 
 with tab_registro:
-    st.subheader("🛒 Registro de Movimientos")
+    st.subheader("Registro de Movimientos")
     
     df_editado = st.data_editor(
         df_man[COLUMNAS],
@@ -89,18 +89,18 @@ with tab_registro:
     g_actual = df_editado[df_editado['Tipo'] == 'Gasto']['Monto'].sum()
     a_actual = df_editado[df_editado['Tipo'] == 'Abono']['Monto'].sum()
     
-    col_g.metric("🔴 Gastos en Tabla", f"${int(g_actual):,}")
-    col_a.metric("🟢 Abonos en Tabla", f"${int(a_actual):,}")
-    col_n.metric("⚖️ Neto (A-G)", f"${int(a_actual - g_actual):,}")
+    col_g.metric("🔴 Gastos", f"${int(g_actual):,}")
+    col_a.metric("🟢 Abonos", f"${int(a_actual):,}")
+    col_n.metric("⚖️ Balance Neto", f"${int(a_actual - g_actual):,}")
     st.markdown("---")
 
-    if st.button("💾 GUARDAR TODO EN GOOGLE SHEETS"):
+    if st.button("💾 GUARDAR"):
         df_save = df_editado.dropna(subset=['Fecha', 'Monto']).copy()
         if not df_save.empty:
             df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
             conn.update(data=df_save)
             st.cache_data.clear()
-            st.success("¡Buen provecho! Datos sincronizados.")
+            st.success("¡Listo! Datos sincronizados.")
             st.balloons()
             st.rerun()
         else:
