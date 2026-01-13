@@ -51,7 +51,8 @@ except Exception as e:
     st.error(f"Error al leer datos: {e}")
     st.stop()
 
-# --- 4. SIDEBAR ---
+
+# --- 4. SIDEBAR CON TERMÓMETRO ---
 with st.sidebar:
     st.header("⚙️ Configuración")
     nuevo_saldo = st.number_input("💰 Saldo Inicial", value=int(saldo_base_valor), step=100, format="%d")
@@ -63,6 +64,18 @@ with st.sidebar:
         st.cache_data.clear()
         st.success("Configuración guardada")
         st.rerun()
+
+    st.divider()
+    st.subheader("🌡️ Termómetro de Atracón")
+    # Calculamos el gasto para el termómetro
+    gastos_totales_term = df_man[df_man['Tipo'] == 'Gasto']['Monto'].sum()
+    porcentaje = min(gastos_totales_term / nuevo_limite, 1.0) if nuevo_limite > 0 else 0
+    
+    if gastos_totales_term > nuevo_limite:
+        st.error(f"🚨 ¡LÍMITE SUPERADO! Llevan ${int(gastos_totales_term):,}")
+    else:
+        st.progress(porcentaje)
+        st.info(f"Llevan ${int(gastos_totales_term):,} de ${int(nuevo_limite):,}")
 
 # --- 5. REGISTRO ---
 tab_reg, tab_analisis = st.tabs(["⌨️ Registro", "📊 Análisis"])
@@ -120,9 +133,11 @@ with tab_reg:
                 st.error(f"Error al sincronizar: {e}")
 
 with tab_analisis:
+    # Quitamos filas sin fecha para las gráficas
     df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
     if not df_p.empty:
-        df_p['Fecha_DT'] = pd.to_datetime(df_p['Fecha']).dt.normalize()
+        # Forzar que la columna para gráficas sea limpia (sin horas)
+        df_p['Fecha_DT'] = pd.to_datetime(df_p['Fecha']).dt.date
         tot_g = df_p[df_p['Tipo'] == 'Gasto']['Monto'].sum()
         tot_a = df_p[df_p['Tipo'] == 'Abono']['Monto'].sum()
         saldo_global = nuevo_saldo - tot_g + tot_a
@@ -140,6 +155,8 @@ with tab_analisis:
 
         fig_line = px.area(diario, x='Fecha_DT', y='Saldo_Proyectado', line_shape="hv", markers=True)
         fig_line.update_traces(line_color='#FF5733', fillcolor='rgba(255, 87, 51, 0.2)')
+        # Formatear el eje X de la gráfica para que no salgan horas
+        fig_line.update_xaxes(tickformat="%d/%m/%y")
         st.plotly_chart(fig_line, use_container_width=True)
 
         st.subheader("🍕 Gastos por Categoría")
@@ -147,4 +164,5 @@ with tab_analisis:
         fig_cat = px.bar(df_cat.sort_values('Monto'), x='Monto', y='Categoria', orientation='h', color='Monto', color_continuous_scale='OrRd')
         st.plotly_chart(fig_cat, use_container_width=True)
     else:
+        st.info("No hay datos para analizar.")
         st.info("No hay datos para analizar.")
