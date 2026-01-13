@@ -6,7 +6,7 @@ from datetime import datetime
 
 # --- BANNER Y TÍTULOS ---
 # Puedes cambiar la URL de abajo por cualquier imagen de comida que les guste
-URL_BANNER = "https://images.unsplash.com/photo-1504674900247-0877df9cc836?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80"
+URL_BANNER = "https://drive.google.com/file/d/11Rdr2cVYIypLjmSp9jssuvoOxQ-kI1IZ/view?usp=sharing"
 
 st.image(URL_BANNER, use_container_width=True)
 
@@ -15,6 +15,7 @@ st.markdown("""
     <style>
     .main {
         background-color: #fffaf0; /* Un color crema muy sutil de fondo */
+        max-height: 300px;
     }
     .stMetric {
         background-color: #ffffff;
