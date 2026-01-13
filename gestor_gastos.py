@@ -6,42 +6,45 @@ import plotly.graph_objects as go
 import os
 from datetime import datetime
 
-st.set_page_config(page_title="Mi Bitácora de Gastos", layout="wide")
+st.set_page_config(page_title="Mi Bitácora Pro", layout="wide")
 st.title("📝 Gestor de Gastos Personales (Nube)")
 
-# --- 1. CONFIGURACIÓN DE SEGURIDAD (IMPORTANTE) ---
-# Esto limpia la llave de tus Secrets para que Google permita la ESCRITURA
+# --- 1. CONFIGURACIÓN DE SEGURIDAD (Limpieza de llave) ---
+# Usamos una copia para no modificar st.secrets directamente
 if "connections" in st.secrets and "gsheets" in st.secrets.connections:
     secret_dict = dict(st.secrets.connections.gsheets)
-    # Extraemos la URL para usarla después
-    target_url = secret_dict.get("spreadsheet") or secret_dict.get("url")
-    # Limpiamos saltos de línea en la llave
     if "private_key" in secret_dict:
+        # Esto soluciona el error de "Incorrect padding" o "bit stream"
         secret_dict["private_key"] = secret_dict["private_key"].replace("\\n", "\n")
+else:
+    st.error("No se encontraron los Secrets configurados.")
+    st.stop()
 
 # --- FUNCIONES DE SOPORTE ---
 def a_float(v):
     try:
         if pd.isna(v) or str(v).strip() == "": return 0.0
-        return float(str(v).replace(',', '').replace('$', '').replace(' ', '').strip())
+        clean_v = str(v).replace(',', '').replace('$', '').replace(' ', '').strip()
+        return float(clean_v)
     except: return 0.0
 
 # --- 2. CONEXIÓN Y LECTURA ---
 try:
-    # Pasamos las credenciales limpias
+    # Conectamos usando la clase oficial
     conn = st.connection("gsheets", type=GSheetsConnection)
-    df_man = conn.read(ttl=0) # ttl=0 obliga a traer lo último de la nube
+    # Leemos con ttl=0 para tener datos en tiempo real
+    df_man = conn.read(ttl=0)
     
     COLUMNAS = ["Fecha", "Concepto", "Monto", "Tipo", "Categoria", "Metodo_Pago"]
     
     if df_man is not None and not df_man.empty:
-        # Limpiar nombres de columnas por si acaso
+        # Limpiar nombres de columnas
         df_man.columns = [str(c).strip() for c in df_man.columns]
-        # Asegurar que existan todas las columnas
+        # Asegurar columnas
         for c in COLUMNAS:
             if c not in df_man.columns: df_man[c] = None
         
-        # Limpiar datos para que coincidan con los selectores (quita espacios invisibles)
+        # Limpiar datos para evitar errores de visualización
         for col in ["Tipo", "Categoria", "Metodo_Pago"]:
             df_man[col] = df_man[col].astype(str).str.strip().replace("nan", "")
             
@@ -57,7 +60,7 @@ except Exception as e:
 # --- CONFIGURACIÓN DE UI ---
 CATEGORIAS = ["Supermercado/Despensa", "Software/Suscripciones", "Alimentos/Restaurantes", "Servicios", "Préstamos", "Viajes", "Salud", "Transporte", "Seguros", "Compras/Otros", "Pagos Realizados"]
 METODOS = ["Manual/Físico", "Automático"]
-disponible_banco = 20000.0 # Valor base si no hay resumen_mensual.csv
+disponible_banco = 20000.0 
 
 # --- TABS ---
 tab_bitacora, tab_analisis = st.tabs(["⌨️ Registro Manual", "📊 Análisis de Gastos"])
@@ -67,7 +70,7 @@ with tab_bitacora:
     
     df_editado = st.data_editor(
         df_man[COLUMNAS],
-        num_rows="dynamic", 
+        num_rows="dynamic",
         width="stretch",
         column_config={
             "Fecha": st.column_config.DateColumn("Fecha", format="DD-MM-YYYY", required=True),
@@ -79,42 +82,41 @@ with tab_bitacora:
         key="editor_nube_vFINAL"
     )
     
-   if st.button("💾 Guardar Cambios en la Nube"):
-        # 1. Limpiar filas vacías
+    # Totales rápidos
+    tg = df_editado[df_editado['Tipo'] == 'Gasto']['Monto'].sum()
+    ta = df_editado[df_editado['Tipo'] == 'Abono']['Monto'].sum()
+    st.markdown(f"**Total Gastos:** ${tg:,.2f} | **Total Abonos:** ${ta:,.2f} | **Neto:** ${tg-ta:,.2f}")
+
+    # --- BOTÓN DE GUARDADO (Corregida la indentación y formato de fecha) ---
+    if st.button("💾 Guardar Cambios en la Nube"):
+        # 1. Filtramos solo filas válidas
         df_save = df_editado.dropna(subset=['Fecha', 'Monto'], how='any').copy()
         
         if not df_save.empty:
-            # 2. FORZAR FORMATO DE FECHA (Crítico para Google Sheets)
+            # 2. CONVERSIÓN DE FECHA: Crítico para que Google Sheets la registre
+            # Usamos formato ISO que Sheets siempre acepta
             df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
-            
-            # Asegurar que el monto sea numérico puro
-            df_save['Monto'] = df_save['Monto'].apply(lambda x: float(x))
             
             try:
                 # 3. Subir a la nube
                 conn.update(data=df_save)
                 
-                # 4. LIMPIAR CACHÉ (Para que no lea datos viejos al recargar)
+                # 4. Limpiar caché para que la siguiente lectura sea fresca
                 st.cache_data.clear()
                 
-                st.success("✅ ¡Sincronización exitosa!")
+                st.success("✅ ¡Datos guardados y fecha registrada!")
                 st.balloons()
                 st.rerun()
             except Exception as e:
                 st.error(f"Error al guardar: {e}")
         else:
-            st.warning("No hay datos válidos para guardar.")
+            st.warning("Asegúrate de poner Fecha y Monto antes de guardar.")
 
 with tab_analisis:
-    # Mantenemos tu lógica de gráficas intacta aquí abajo...
     if not df_man.dropna(subset=['Monto', 'Fecha']).empty:
-        # (Aquí va el resto de tu código de gráficas que ya tenías)
-        st.info("Análisis cargado correctamente.")
-
-    if not df_man.empty:
-        # Tu lógica de análisis intacta
         df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
-        df_p['Fecha_DT'] = pd.to_datetime(df_p['Fecha']).dt.normalize()
+        # Normalizamos fecha para la gráfica (agrupar por día)
+        df_p['Fecha_DT'] = df_p['Fecha'].dt.normalize()
         
         total_g = df_p[df_p['Tipo'] == 'Gasto']['Monto'].sum()
         total_a = df_p[df_p['Tipo'] == 'Abono']['Monto'].sum()
@@ -132,33 +134,24 @@ with tab_analisis:
         
         with c2:
             fig_gauge = go.Figure(go.Indicator(
-                mode = "gauge+number", value = uso_manual,
+                mode = "gauge+number", value = min(uso_manual, 100),
                 title = {'text': "% Uso de Disponible"},
-                gauge = {
-                    'axis': {'range': [0, 100]},
-                    'bar': {'color': "#1f77b4"},
-                    'steps': [
-                        {'range': [0, 50], 'color': "lightgreen"},
-                        {'range': [50, 80], 'color': "orange"},
-                        {'range': [80, 100], 'color': "red"}]}))
+                gauge = {'bar': {'color': "#1f77b4"}}))
             fig_gauge.update_layout(height=250, margin=dict(t=50, b=0, l=20, r=20))
             st.plotly_chart(fig_gauge, use_container_width=True)
 
         # --- FILA 2: GRÁFICA DE ESCALERA ---
-        
         st.divider()
         diario = df_p.groupby('Fecha_DT').apply(lambda x: (x[x['Tipo']=='Abono']['Monto'].sum() - x[x['Tipo']=='Gasto']['Monto'].sum())).reset_index(name='Efecto')
         diario = diario.sort_values('Fecha_DT')
         diario['Saldo_Proyectado'] = disponible_banco + diario['Efecto'].cumsum()
 
-        fecha_ini = diario['Fecha_DT'].min() - pd.Timedelta(days=1) if not diario.empty else datetime.now()
-        df_plot = pd.concat([pd.DataFrame({'Fecha_DT':[fecha_ini], 'Saldo_Proyectado':[disponible_banco]}), diario]).sort_values('Fecha_DT')
-
-        fig_line = px.area(df_plot, x='Fecha_DT', y='Saldo_Proyectado', 
+        fig_line = px.area(diario, x='Fecha_DT', y='Saldo_Proyectado', 
                           line_shape="hv", markers=True, title="Trayectoria del Crédito Disponible")
-        fig_line.update_xaxes(dtick="D1", tickformat="%d %b")
+        
+        # Ajustamos el eje X para que no se vea "raro" con demasiados días
+        fig_line.update_xaxes(nticks=10, tickformat="%d %b")
         fig_line.update_traces(line_color='#28A745', fillcolor='rgba(40, 167, 69, 0.2)')
-        fig_line.add_hline(y=0, line_dash="dash", line_color="red")
         st.plotly_chart(fig_line, use_container_width=True)
 
         # --- FILA 3: DISTRIBUCIÓN ---
@@ -168,7 +161,7 @@ with tab_analisis:
             fig_pie = px.pie(df_p[df_p['Tipo'] == 'Gasto'], values='Monto', names='Metodo_Pago', hole=0.4, title="Gastos: Auto vs Manual")
             st.plotly_chart(fig_pie, use_container_width=True)
         with gc2:
-            fig_cat = px.bar(df_p[df_p['Tipo'] == 'Gasto'].groupby('Categoria')['Monto'].sum().reset_index(), x='Categoria', y='Monto', title="Gastos por Categoría", color='Monto')
+            fig_cat = px.bar(df_p[df_p['Tipo'] == 'Gasto'].groupby('Categoria')['Monto'].sum().reset_index(), x='Categoria', y='Monto', title="Gastos por Categoría")
             st.plotly_chart(fig_cat, use_container_width=True)
     else:
         st.info("Agrega datos para ver el análisis.")
