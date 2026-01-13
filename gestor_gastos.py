@@ -65,7 +65,7 @@ with st.sidebar:
         st.rerun()
 
 # --- 5. REGISTRO ---
-tab_reg, tab_ana = st.tabs(["⌨️ Registro", "📊 Análisis"])
+tab_reg, tab_analisis = st.tabs(["⌨️ Registro", "📊 Análisis"])
 
 with tab_reg:
     st.subheader("🛒 Registro de Movimientos")
@@ -119,7 +119,7 @@ with tab_reg:
             except Exception as e:
                 st.error(f"Error al sincronizar: {e}")
 
-with tab_ana:
+with tab_analisis:
    df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
     if not df_p.empty:
         df_p['Fecha_DT'] = pd.to_datetime(df_p['Fecha']).dt.normalize()
