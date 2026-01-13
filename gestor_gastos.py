@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import plotly.express as px
+from datetime import datetime
 
 # 1. CONFIGURACIÓN ÚNICA
 st.set_page_config(page_title="Bitácora de Gorditos 🍔", layout="wide")
@@ -15,7 +16,6 @@ st.title("🍕 Bitácora de Gorditos 🍔")
 # --- 2. CONEXIÓN Y ESTRUCTURA ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Definimos el orden exacto que queremos en el Excel
 COLUMNAS_MAESTRAS = [
     "Fecha", "Concepto", "Monto", "Tipo", 
     "Categoria", "Tipo_Pago", "Metodo_Pago", "Responsable"
@@ -23,7 +23,7 @@ COLUMNAS_MAESTRAS = [
 
 # --- 3. LECTURA DE DATOS ---
 try:
-    # Leer Configuración (Pestaña Config)
+    # Leer Configuración
     try:
         df_config = conn.read(worksheet="Config", ttl=0)
         saldo_base_valor = float(df_config.iloc[0, 0]) if not df_config.empty else 20000.0
@@ -36,12 +36,12 @@ try:
     
     if df_man is not None and not df_man.empty:
         df_man.columns = [str(c).strip() for c in df_man.columns]
-        # Si faltan columnas nuevas, las creamos con valores vacíos
         for c in COLUMNAS_MAESTRAS:
             if c not in df_man.columns:
                 df_man[c] = ""
-        # Reordenamos para que el Dashboard siempre vea lo mismo
+        
         df_man = df_man[COLUMNAS_MAESTRAS]
+        # IMPORTANTE: Convertimos a datetime para el editor, pero quitamos las horas
         df_man['Fecha'] = pd.to_datetime(df_man['Fecha'], errors='coerce')
         df_man['Monto'] = pd.to_numeric(df_man['Monto'], errors='coerce').fillna(0.0)
     else:
@@ -66,7 +66,6 @@ with st.sidebar:
 
     st.divider()
     st.subheader("🌡️ Termómetro de Atracón")
-    # Calculamos el gasto para el termómetro
     gastos_totales_term = df_man[df_man['Tipo'] == 'Gasto']['Monto'].sum()
     porcentaje = min(gastos_totales_term / nuevo_limite, 1.0) if nuevo_limite > 0 else 0
     
@@ -82,6 +81,7 @@ tab_reg, tab_analisis = st.tabs(["⌨️ Registro", "📊 Análisis"])
 with tab_reg:
     st.subheader("🛒 Registro de Movimientos")
     
+    # El editor usa el formato de fecha de Python
     df_editado = st.data_editor(
         df_man,
         num_rows="dynamic",
@@ -95,10 +95,9 @@ with tab_reg:
             "Metodo_Pago": st.column_config.SelectboxColumn("💳 Forma pago", options=["TDC", "Efectivo", "TDD"]),
             "Responsable": st.column_config.SelectboxColumn("👤 Responsable", options=["Gordify", "Mon"])
         },
-        key="editor_vFinal_8col"
+        key="editor_final_v10" # Cambiamos la key para resetear el estado
     )
 
-    # Totales proyectados
     g_actual = df_editado[df_editado['Tipo'] == 'Gasto']['Monto'].sum()
     a_actual = df_editado[df_editado['Tipo'] == 'Abono']['Monto'].sum()
     neto_proyectado = nuevo_saldo + a_actual - g_actual
@@ -111,32 +110,34 @@ with tab_reg:
     st.markdown("---")
 
     if st.button("💾 GUARDAR TODO EN GOOGLE SHEETS"):
-        # PASO CLAVE: Solo guardamos si hay datos, y forzamos la estructura
+        # PASO 1: Filtrar solo lo que tiene Fecha y Concepto
         df_save = df_editado.dropna(subset=['Fecha', 'Concepto']).copy()
         
         if not df_save.empty:
-            # Convertimos fecha a texto para que Google no se confunda
+            # PASO 2: Forzar la Fecha a STRING (YYYY-MM-DD) para que Google Sheets no se bloquee
             df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
             
-            # Forzamos que el DataFrame tenga las 8 columnas antes de enviarlo
+            # PASO 3: Asegurar las 8 columnas
             df_final = df_save[COLUMNAS_MAESTRAS]
             
             try:
-                # Usamos la conexión para sobreescribir la tabla
                 conn.update(data=df_final)
                 st.cache_data.clear()
-                st.success("✅ ¡Sincronizado correctamente!")
+                st.success("✅ ¡Guardado con éxito!")
                 st.balloons()
                 st.rerun()
             except Exception as e:
-                st.error(f"Error al sincronizar: {e}")
+                st.error(f"Error al guardar: {e}")
+        else:
+            st.warning("Asegúrate de poner Fecha y Concepto en los nuevos registros.")
 
 with tab_analisis:
-    # Quitamos filas sin fecha para las gráficas
+    # Usamos df_man que ya tiene las fechas limpias de la lectura
     df_p = df_man.dropna(subset=['Monto', 'Fecha']).copy()
     if not df_p.empty:
-        # Forzar que la columna para gráficas sea limpia (sin horas)
-        df_p['Fecha_DT'] = pd.to_datetime(df_p['Fecha']).dt.date
+        # Para la gráfica, normalizamos la fecha a "solo día"
+        df_p['Fecha_Grafica'] = pd.to_datetime(df_p['Fecha']).dt.normalize()
+        
         tot_g = df_p[df_p['Tipo'] == 'Gasto']['Monto'].sum()
         tot_a = df_p[df_p['Tipo'] == 'Abono']['Monto'].sum()
         saldo_global = nuevo_saldo - tot_g + tot_a
@@ -144,23 +145,17 @@ with tab_analisis:
         st.subheader("🍴 Estado de Nuestra Fortuna")
         m1, m2, m3 = st.columns(3)
         m1.metric("💰 Fondo Inicial", f"${int(nuevo_saldo):,}")
-        m2.metric("🍗 Gastado Total", f"${int(tot_g):,}", delta_color="inverse")
+        m2.metric("🍗 Gastado Total", f"${int(tot_g):,}")
         m3.metric("🥗 Disponible Real", f"${int(saldo_global):,}")
 
-        # Gráfica de Escalera
-        diario = df_p.groupby('Fecha_DT').apply(lambda x: (x[x['Tipo']=='Abono']['Monto'].sum() - x[x['Tipo']=='Gasto']['Monto'].sum())).reset_index(name='Efecto')
-        diario = diario.sort_values('Fecha_DT')
+        # Gráfica de Escalera corregida
+        diario = df_p.groupby('Fecha_Grafica').apply(lambda x: (x[x['Tipo']=='Abono']['Monto'].sum() - x[x['Tipo']=='Gasto']['Monto'].sum())).reset_index(name='Efecto')
+        diario = diario.sort_values('Fecha_Grafica')
         diario['Saldo_Proyectado'] = nuevo_saldo + diario['Efecto'].cumsum()
 
-        fig_line = px.area(diario, x='Fecha_DT', y='Saldo_Proyectado', line_shape="hv", markers=True)
+        fig_line = px.area(diario, x='Fecha_Grafica', y='Saldo_Proyectado', line_shape="hv", markers=True)
         fig_line.update_traces(line_color='#FF5733', fillcolor='rgba(255, 87, 51, 0.2)')
-        # Formatear el eje X de la gráfica para que no salgan horas
-        fig_line.update_xaxes(tickformat="%d/%m/%y")
+        fig_line.update_xaxes(tickformat="%d/%m/%Y", title="Día")
         st.plotly_chart(fig_line, use_container_width=True)
-
-        st.subheader("🍕 Gastos por Categoría")
-        df_cat = df_p[df_p['Tipo'] == 'Gasto'].groupby('Categoria')['Monto'].sum().reset_index()
-        fig_cat = px.bar(df_cat.sort_values('Monto'), x='Monto', y='Categoria', orientation='h', color='Monto', color_continuous_scale='OrRd')
-        st.plotly_chart(fig_cat, use_container_width=True)
     else:
-        st.info("No hay datos para analizar.")
+        st.info("No hay datos suficientes para las gráficas.")
