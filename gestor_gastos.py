@@ -6,7 +6,7 @@ from datetime import datetime
 
 # --- BANNER Y TÍTULOS ---
 # Puedes cambiar la URL de abajo por cualquier imagen de comida que les guste
-URL_BANNER = "https://drive.usercontent.google.com/download?id=11Rdr2cVYIypLjmSp9jssuvoOxQ-kI1IZ&authuser=1"
+URL_BANNER = "https://drive.usercontent.google.com/download?id=11Rdr2cVYIypLjmSp9jssuvoOxQ-kI1IZ"
 
 st.image(URL_BANNER, use_container_width=True)
 
@@ -15,7 +15,6 @@ st.markdown("""
     <style>
     .main {
         background-color: #fffaf0; /* Un color crema muy sutil de fondo */
-        max-height: 300px;
     }
     .stMetric {
         background-color: #ffffff;
@@ -26,7 +25,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown("### *Porque comer es un placer, pero pagarlo es un deber...* 🍔🍟")
 
 # --- 1. CONFIGURACIÓN DE SEGURIDAD ---
 if "connections" in st.secrets and "gsheets" in st.secrets.connections:
