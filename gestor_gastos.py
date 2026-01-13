@@ -75,8 +75,11 @@ with tab_reg:
             "Fecha": st.column_config.DateColumn("📅 Fecha", format="DD/MM/YYYY"),
             "Monto": st.column_config.NumberColumn("💵 Monto", format="$%d"),
             "Tipo": st.column_config.SelectboxColumn("✨ Tipo", options=["Gasto", "Abono"]),
-            "Responsable": st.column_config.SelectboxColumn("👤 Responsable", options=["Gordify", "Mon"]),
             "Categoria": st.column_config.SelectboxColumn("📂 Categoría", options=["Super", "Software", "Suscripciones", "Restaurantes", "Servicios", "Salud", "Préstamos", "Viajes", "Otros"]),
+            "Tipo_Pago": st.column_config.SelectboxColumn("📂 Modo Pago", options=["Manual", "Automático"]),
+            "Metodo_Pago": st.column_config.SelectboxColumn("📂 Método Pago", options=["TDC", "TDD", "Efectivo", "Transferencia]),
+            "Responsable": st.column_config.SelectboxColumn("👤 Responsable", options=["Gordify", "Mon"])
+           
         },
         key="editor_sin_id_manual_v1"
     )
