@@ -7,7 +7,7 @@ import time
 # 1. CONFIGURACIÓN INICIAL
 st.set_page_config(page_title="Bitácora de Gorditos 🍔", layout="wide")
 
-URL_BANNER = "https://lh3.googleusercontent.com/d/11Rdr2cVYIypLjmSp9jssuvoOxQ-kI1IZ"
+URL_BANNER = "https://lh3.googleusercontent.com/d/1EUsTVjPgKQ8hsjUggCHVlp6A-Lx1pLj-"
 st.image(URL_BANNER, width='stretch')
 st.title("🍕 Bitácora de Gorditos 🍔")
 
@@ -53,7 +53,7 @@ with st.sidebar:
     n_saldo = st.number_input("💰 Saldo Base", value=int(saldo_base_valor), step=100)
     n_limite = st.number_input("⚠️ Límite Gasto", value=int(limite_atracon), step=500)
     
-    if st.button("🍳 Guardar Config"):
+    if st.button("Guardar"):
         conn.update(worksheet="Config", data=pd.DataFrame({"SaldoBase": [n_saldo], "Limite": [n_limite]}))
         st.cache_data.clear()
         st.rerun()
