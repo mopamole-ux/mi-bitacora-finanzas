@@ -7,7 +7,7 @@ import time
 # 1. CONFIGURACIÓN INICIAL
 st.set_page_config(page_title="Bitácora de Gorditos 🍔", layout="wide")
 
-URL_BANNER = "https://lh3.googleusercontent.com/d/1EUsTVjPgKQ8hsjUggCHVlp6A-Lx1pLj-"
+URL_BANNER = "https://lh3.googleusercontent.com/d/1kP3Hi20G7dvEckhK7B-0EHm72__331cR"
 st.image(URL_BANNER, width='stretch')
 st.title("🍕 Bitácora de Gorditos 🍔")
 
