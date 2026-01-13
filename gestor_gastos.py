@@ -155,6 +155,52 @@ with tab_analisis:
             st.plotly_chart(fig_gauge, use_container_width=True)
 
         # --- FILA 2: GRÁFICA DE ESCALERA ---
+
+with tab2:
+    if not df_man.dropna(subset=['Fecha', 'Monto']).empty:
+        # --- PREPARACIÓN PARA GRÁFICO DIARIO ---
+        df_p = df_man.dropna(subset=['Fecha', 'Monto']).copy()
+        
+        # Forzar a que la fecha sea solo el DÍA (elimina horas/minutos)
+        df_p['Fecha_Dia'] = df_p['Fecha'].dt.normalize()
+        
+        # Agrupar por día para que no salgan mil puntos en el eje X
+        diario = df_p.groupby('Fecha_Dia').apply(
+            lambda x: x[x['Tipo']=='Abono']['Monto'].sum() - x[x['Tipo']=='Gasto']['Monto'].sum()
+        ).reset_index(name='Cambio_Neto')
+        
+        diario = diario.sort_values('Fecha_Dia')
+        diario['Saldo_Acumulado'] = disponible_banco + diario['Cambio_Neto'].cumsum()
+
+        # --- GRÁFICO ---
+        fig = px.area(
+            diario, 
+            x='Fecha_Dia', 
+            y='Saldo_Acumulado', 
+            line_shape="hv", # Forma de escalera (escalones)
+            title="Evolución del Saldo Disponible (Día a Día)",
+            markers=True
+        )
+        
+        # Configurar eje X para que se vea limpio
+        fig.update_xaxes(
+            title="Día",
+            dtick="D1", # Forzar una marca por cada día
+            tickformat="%d %b" # Ejemplo: 12 Jan
+        )
+        
+        fig.update_traces(line_color='#28A745', fillcolor='rgba(40, 167, 69, 0.2)')
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Mostrar resumen de hoy
+        hoy = datetime.now().date()
+        saldo_hoy = diario['Saldo_Acumulado'].iloc[-1] if not diario.empty else disponible_banco
+        st.metric("Saldo al día de hoy", f"${saldo_hoy:,.2f}")
+    else:
+        st.info("Agrega registros con fecha en la pestaña anterior para ver el gráfico.")
+
+
+        
         st.divider()
         diario = df_p.groupby('Fecha_DT').apply(lambda x: (x[x['Tipo']=='Abono']['Monto'].sum() - x[x['Tipo']=='Gasto']['Monto'].sum())).reset_index(name='Efecto')
         diario = diario.sort_values('Fecha_DT')
