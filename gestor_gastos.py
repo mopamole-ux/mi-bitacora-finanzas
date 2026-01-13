@@ -79,41 +79,31 @@ with tab_bitacora:
         key="editor_nube_vFINAL"
     )
     
-    if st.button("💾 Guardar Cambios en la Nube"):
-        # 1. Copia de seguridad del editor
-        df_save = df_editado.copy()
-        
-        # 2. Filtrar: Solo filas que tengan Fecha y Monto (evita basura)
-        df_save = df_save.dropna(subset=['Fecha', 'Monto'], how='any')
+   if st.button("💾 Guardar Cambios en la Nube"):
+        # 1. Limpiar filas vacías
+        df_save = df_editado.dropna(subset=['Fecha', 'Monto'], how='any').copy()
         
         if not df_save.empty:
-            # --- TRUCO DE FECHA PARA GOOGLE ---
-            # Convertimos a datetime y luego a string ISO (YYYY-MM-DD)
-            # Esto es lo que Google Sheets entiende como Fecha universal
+            # 2. FORZAR FORMATO DE FECHA (Crítico para Google Sheets)
             df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
             
-            # Aseguramos que el resto sean formatos simples
-            df_save['Monto'] = df_save['Monto'].astype(float)
-            df_save['Concepto'] = df_save['Concepto'].astype(str).fillna("")
+            # Asegurar que el monto sea numérico puro
+            df_save['Monto'] = df_save['Monto'].apply(lambda x: float(x))
             
             try:
-                # 3. ACTUALIZACIÓN REAL
+                # 3. Subir a la nube
                 conn.update(data=df_save)
                 
-                # 4. LIMPIEZA DE MEMORIA (CRUCIAL)
-                # Esto borra la copia vieja que Streamlit tiene guardada
-                st.cache_data.clear() 
+                # 4. LIMPIAR CACHÉ (Para que no lea datos viejos al recargar)
+                st.cache_data.clear()
                 
-                st.success(f"✅ ¡{len(df_save)} movimientos guardados!")
+                st.success("✅ ¡Sincronización exitosa!")
                 st.balloons()
-                
-                # 5. Reinicio para ver los cambios
                 st.rerun()
-                
             except Exception as e:
-                st.error(f"Error al enviar a Google Sheets: {e}")
+                st.error(f"Error al guardar: {e}")
         else:
-            st.warning("No hay datos válidos (Fecha y Monto) para guardar.")
+            st.warning("No hay datos válidos para guardar.")
 
 with tab_analisis:
     # Mantenemos tu lógica de gráficas intacta aquí abajo...
@@ -155,48 +145,6 @@ with tab_analisis:
             st.plotly_chart(fig_gauge, use_container_width=True)
 
         # --- FILA 2: GRÁFICA DE ESCALERA ---
-
-        df_p = df_man.dropna(subset=['Fecha', 'Monto']).copy()
-        
-        # Forzar a que la fecha sea solo el DÍA (elimina horas/minutos)
-        df_p['Fecha_Dia'] = df_p['Fecha'].dt.normalize()
-        
-        # Agrupar por día para que no salgan mil puntos en el eje X
-        diario = df_p.groupby('Fecha_Dia').apply(
-            lambda x: x[x['Tipo']=='Abono']['Monto'].sum() - x[x['Tipo']=='Gasto']['Monto'].sum()
-        ).reset_index(name='Cambio_Neto')
-        
-        diario = diario.sort_values('Fecha_Dia')
-        diario['Saldo_Acumulado'] = disponible_banco + diario['Cambio_Neto'].cumsum()
-
-        # --- GRÁFICO ---
-        fig = px.area(
-            diario, 
-            x='Fecha_Dia', 
-            y='Saldo_Acumulado', 
-            line_shape="hv", # Forma de escalera (escalones)
-            title="Evolución del Saldo Disponible (Día a Día)",
-            markers=True
-        )
-        
-        # Configurar eje X para que se vea limpio
-        fig.update_xaxes(
-            title="Día",
-            dtick="D1", # Forzar una marca por cada día
-            tickformat="%d %b" # Ejemplo: 12 Jan
-        )
-        
-        fig.update_traces(line_color='#28A745', fillcolor='rgba(40, 167, 69, 0.2)')
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Mostrar resumen de hoy
-        hoy = datetime.now().date()
-        saldo_hoy = diario['Saldo_Acumulado'].iloc[-1] if not diario.empty else disponible_banco
-        st.metric("Saldo al día de hoy", f"${saldo_hoy:,.2f}")
-    else:
-        st.info("Agrega registros con fecha en la pestaña anterior para ver el gráfico.")
-
-
         
         st.divider()
         diario = df_p.groupby('Fecha_DT').apply(lambda x: (x[x['Tipo']=='Abono']['Monto'].sum() - x[x['Tipo']=='Gasto']['Monto'].sum())).reset_index(name='Efecto')
