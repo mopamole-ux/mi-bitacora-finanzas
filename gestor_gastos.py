@@ -5,7 +5,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 
-st.set_page_config(page_title="Mi Bitácora Pro", layout="wide")
+# Configuración divertida
+st.set_page_config(page_title="La Bitácora de los Comelones 🍔", layout="wide")
+st.title("🍕 El Festín de las Finanzas 🌮")
+st.markdown("### *Porque comer es un placer, pero pagarlo es un deber...*")
 
 # --- 1. CONFIGURACIÓN DE SEGURIDAD ---
 if "connections" in st.secrets and "gsheets" in st.secrets.connections:
@@ -72,34 +75,30 @@ with tab_bitacora:
         },
         key="editor_nube_v_final"
     )
+    # Totales rápidos estilo "Ticket de restaurante"
+    g_total = df_editado[df_editado['Tipo'] == 'Gasto']['Monto'].sum()
+    a_total = df_editado[df_editado['Tipo'] == 'Abono']['Monto'].sum()
     
-    # --- CÁLCULO DE TOTALES EN PANTALLA ---
-    gastos_temp = df_editado[df_editado['Tipo'] == 'Gasto']['Monto'].sum()
-    abonos_temp = df_editado[df_editado['Tipo'] == 'Abono']['Monto'].sum()
-    
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total Gastos (en tabla)", f"${gastos_temp:,.2f}")
-    c2.metric("Total Abonos (en tabla)", f"${abonos_temp:,.2f}")
-    c3.metric("Neto Actual", f"${abonos_temp - gastos_temp:,.2f}")
+    st.markdown(f"""
+    ---
+    **RESUMEN DEL TICKET:**
+    * 🔴 Total Gastado: `${g_total:,.2f}`
+    * 🟢 Total Abonos: `${a_total:,.2f}`
+    * ⚖️ Diferencia: `${a_total - g_total:,.2f}`
+    """)
 
-    if st.button("💾 GUARDAR CAMBIOS PERMANENTES"):
+    if st.button("👨‍🍳 ENVIAR A COCINA (Guardar)"):
         df_save = df_editado.dropna(subset=['Fecha', 'Monto'], how='any').copy()
-        
         if not df_save.empty:
-            # FORMATO DE FECHA PARA GOOGLE SHEETS
             df_save['Fecha'] = pd.to_datetime(df_save['Fecha']).dt.strftime('%Y-%m-%d')
+            # Limpiar emojis de la categoría antes de guardar para no romper el Excel
+            df_save['Categoria'] = df_save['Categoria'].str.split(" ").str[-1]
             
-            try:
-                conn.update(data=df_save)
-                # LIMPIEZA DE CACHÉ: Esto es lo que faltaba para que se "vea" el cambio
-                st.cache_data.clear()
-                st.success("✅ ¡Datos sincronizados con Google Sheets!")
-                st.balloons()
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error al guardar: {e}")
-        else:
-            st.warning("Agrega datos válidos antes de guardar.")
+            conn.update(data=df_save)
+            st.cache_data.clear()
+            st.success("¡Buen provecho! Datos guardados.")
+            st.balloons()
+            st.rerun()
 
 with tab_analisis:
     if not df_man.dropna(subset=['Monto', 'Fecha']).empty:
