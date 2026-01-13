@@ -35,10 +35,12 @@ else:
     st.error("¡Faltan las credenciales!")
     st.stop()
 
-# --- 2. CONEXIÓN Y LECTURA ---
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    
+# --- CONFIGURACIÓN ---
+st.set_page_config(page_title="Bitácora de Gorditos 🍔", layout="wide")
+
+# --- CONEXIÓN ---
+conn = st.connection("gsheets", type=GSheetsConnection)
+
 # 1. Definición Maestra de Columnas (El orden importa)
 COLUMNAS_MAESTRAS = [
     "Fecha", "Concepto", "Monto", "Tipo", 
@@ -65,7 +67,6 @@ if df_man is not None and not df_man.empty:
     df_man['Monto'] = pd.to_numeric(df_man['Monto'], errors='coerce').fillna(0.0)
 else:
     df_man = pd.DataFrame(columns=COLUMNAS_MAESTRAS)
-    
 
 # --- SIDEBAR: TERMÓMETRO Y CONFIG ---
 with st.sidebar:
